@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Smart Bookmark Organizer",
+  "name": "Everything — Smart Productivity Suite & Video Cinema HUD",
   "version": "1.0.0",
-  "description": "Toggle a floating Command Center overlay on any web page (Alt+Shift+A) to browse, search, and manage bookmarks Raycast-style.",
+  "description": "Raycast-style Command Palette, Pro Video Player Suite (Ambient Lighting, Auto-Stretch, Zoom), Bookmark Organizer, Clipboard & Media Tools.",
   "permissions": [
     "bookmarks",
     "storage",
