@@ -69,90 +69,148 @@
       gap: 12px;
     }
     .filter-pills {
-      display: flex;
-      background: rgba(255,255,255,0.05);
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      overflow: hidden;
+      display: inline-flex;
+      background: rgba(18, 20, 28, 0.75);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 3px;
+      gap: 3px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
     }
     .filter-pill {
       background: transparent;
-      border: none;
-      color: var(--text-muted);
-      padding: 8px 16px;
-      font-size: 13px;
-      font-weight: 500;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      padding: 6px 14px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      font-weight: 550;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      white-space: nowrap;
+      user-select: none;
     }
     .filter-pill:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
     }
     .filter-pill.active {
-      background: rgba(139, 92, 246, 0.2);
-      color: var(--primary);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(124, 58, 237, 0.45) 100%);
+      color: #ffffff;
+      border: 1px solid rgba(167, 139, 250, 0.45);
+      box-shadow: 0 2px 12px rgba(139, 92, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
     .search-input {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border);
-      color: white;
-      padding: 8px 16px 8px 36px;
-      border-radius: 8px;
-      font-size: 13px;
-      width: 200px;
+      background: rgba(18, 20, 28, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f1f5f9;
+      padding: 7px 16px 7px 36px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      width: 210px;
       outline: none;
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%23a1a1aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="%23a1a1aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
       background-repeat: no-repeat;
       background-position: 12px center;
-      transition: border-color 0.2s;
+      transition: all 0.2s ease;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(16px);
     }
     .search-input:focus {
-      border-color: var(--primary);
+      border-color: #8b5cf6;
+      width: 250px;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25), inset 0 1px 3px rgba(0, 0, 0, 0.35);
     }
     .select-dropdown {
-      background: rgba(255,255,255,0.05);
-      color: white;
-      border: 1px solid var(--border);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 13px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background: rgba(22, 24, 34, 0.82) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 12px center / 12px 12px;
+      color: #f1f5f9;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 7px 34px 7px 13px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 550;
+      letter-spacing: 0.15px;
       outline: none;
       cursor: pointer;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .select-dropdown option { background: #111218; }
+    .select-dropdown:hover {
+      border-color: rgba(167, 139, 250, 0.5);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+    .select-dropdown:focus {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.28), 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    .select-dropdown option {
+      background: #12131c;
+      color: #f1f5f9;
+      padding: 10px 12px;
+      font-weight: 500;
+    }
     
     .btn {
-      background: var(--primary);
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
       color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 7px 15px;
+      border-radius: 10px;
       cursor: pointer;
-      font-weight: 500;
-      font-size: 13px;
-      transition: all 0.2s;
-      display: flex;
+      font-weight: 550;
+      font-size: 12.5px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
+      box-shadow: 0 4px 14px rgba(139, 92, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(16px);
+      user-select: none;
     }
-    .btn:hover { background: var(--primary-hover); }
+    .btn:hover {
+      background: linear-gradient(135deg, #9061f9 0%, #6d28d9 100%);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      transform: translateY(-1px);
+    }
     .btn-danger {
-      background: rgba(239, 68, 68, 0.1);
-      color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.2);
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.18) 100%);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
     .btn-danger:hover {
-      background: var(--danger);
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      border-color: #f87171;
       color: white;
+      box-shadow: 0 0 22px rgba(239, 68, 68, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      transform: translateY(-1px);
     }
     .btn-secondary {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border);
-      color: var(--text);
+      background: linear-gradient(180deg, rgba(34, 37, 52, 0.8) 0%, rgba(20, 22, 32, 0.92) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      color: #f1f5f9;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     }
     .btn-secondary:hover {
-      background: rgba(255,255,255,0.1);
+      background: linear-gradient(180deg, rgba(46, 50, 72, 0.9) 0%, rgba(28, 31, 46, 0.98) 100%);
+      border-color: rgba(167, 139, 250, 0.45);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      transform: translateY(-1px);
+      color: #ffffff;
+    }
+    .btn-select-mode.active {
+      background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
+      border-color: rgba(196, 181, 253, 0.7) !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+      transform: translateY(-1px);
     }
 
     #scroll-area {
@@ -196,11 +254,33 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 400px;
+      max-width: min(720px, 65vw);
+    }
+    .v-header-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      padding: 2px 4px;
+      border-radius: 4px;
+      margin-left: 6px;
+      text-decoration: none;
+      transition: color 0.15s, background 0.15s;
+      vertical-align: middle;
+    }
+    .v-header-link:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.12);
     }
     .v-header-meta {
       font-size: 12px;
       color: var(--text-muted);
+    }
+
+    #content-area {
+      position: relative;
+      width: 100%;
+      contain: layout style;
     }
 
     .v-card {
@@ -214,9 +294,12 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
       cursor: pointer;
+      will-change: transform;
+      transform: translateZ(0);
+      contain: paint layout;
     }
     .v-card:hover {
-      transform: translateY(-2px);
+      transform: translateY(-2px) translateZ(0);
       box-shadow: 0 8px 24px rgba(0,0,0,0.4);
       border-color: rgba(255,255,255,0.2);
     }
@@ -233,7 +316,13 @@
       object-fit: cover;
       background: #000;
       z-index: 1;
+      opacity: 0;
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
+    .v-card.loaded .v-card-media {
+      opacity: 1;
+    }
+
     .v-card-skeleton {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -241,12 +330,28 @@
       height: 100%;
       background: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
       background-size: 200% 100%;
-      animation: skeleton-loading 1.5s infinite linear;
+      animation: skeleton-loading 1.4s infinite ease-in-out;
       z-index: 2;
+      opacity: 1;
+      transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+    .v-card.loaded .v-card-skeleton {
+      opacity: 0;
+      pointer-events: none;
     }
     @keyframes skeleton-loading {
       0% { background-position: 200% 0; }
       100% { background-position: -200% 0; }
+    }
+
+    .initial-skeleton {
+      pointer-events: none;
+      animation: fade-in-pulse 0.4s ease forwards;
+    }
+    @keyframes fade-in-pulse {
+      from { opacity: 0; transform: scale(0.97) translateZ(0); }
+      to { opacity: 1; transform: scale(1) translateZ(0); }
     }
     
     .v-card-overlay {
@@ -267,18 +372,47 @@
     .v-card-top {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
     }
     .v-card-type {
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.65);
       backdrop-filter: blur(4px);
-      padding: 4px 8px;
+      padding: 3px 8px;
       border-radius: 6px;
       font-size: 11px;
       font-weight: 600;
       display: flex;
       align-items: center;
       gap: 4px;
+      color: #fff;
+    }
+    .v-card-url-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(6px);
+      color: #d4d4d8;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      text-decoration: none;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transition: all 0.2s;
+      cursor: pointer;
+      z-index: 5;
+    }
+    .v-card-url-badge:hover {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+      transform: translateY(-1px);
     }
     .v-card-select {
       width: 20px;
@@ -297,35 +431,47 @@
     .v-card-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 8px;
+      align-items: center;
+      gap: 6px;
+      z-index: 5;
     }
     .icon-btn {
-      background: rgba(255,255,255,0.15);
-      backdrop-filter: blur(4px);
-      border: none;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.1);
       color: white;
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      text-decoration: none;
       transition: all 0.2s;
     }
     .icon-btn:hover {
-      background: rgba(255,255,255,0.3);
-      transform: scale(1.05);
+      background: rgba(255,255,255,0.25);
+      transform: scale(1.06);
     }
     .icon-btn.danger:hover {
       background: rgba(239, 68, 68, 0.9);
+      border-color: var(--danger);
+    }
+    .icon-btn.btn-fav:hover, .icon-btn.btn-fav.active {
+      color: #facc15;
+      border-color: rgba(250, 204, 21, 0.4);
+    }
+    .icon-btn.btn-visit:hover {
+      color: #93c5fd;
+      border-color: rgba(147, 197, 253, 0.4);
     }
 
     #lightbox {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.95);
-      backdrop-filter: blur(10px);
+      background: rgba(0,0,0,0.96);
+      backdrop-filter: blur(12px);
       z-index: 1000;
       display: none;
       flex-direction: column;
@@ -337,12 +483,43 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 24px;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+      padding: 14px 28px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+      z-index: 10;
     }
     .lightbox-meta {
       font-size: 13px;
       color: var(--text-muted);
+    }
+    .lightbox-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .lb-source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      color: #c4b5fd;
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s;
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .lb-source-link:hover {
+      background: rgba(139, 92, 246, 0.35);
+      color: #fff;
+      border-color: var(--primary);
+      transform: translateY(-1px);
     }
     .lightbox-content {
       flex: 1;
@@ -350,12 +527,80 @@
       align-items: center;
       justify-content: center;
       position: relative;
+      overflow: hidden;
+      user-select: none;
+    }
+    .lb-media-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
     }
     .lightbox-media {
       max-width: 90vw;
       max-height: 85vh;
       object-fit: contain;
       box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      transition: transform 0.08s ease-out;
+      transform-origin: center center;
+    }
+    #lb-img {
+      cursor: zoom-in;
+    }
+    #lb-img.zoomed {
+      cursor: grab;
+      max-width: none;
+      max-height: none;
+    }
+    #lb-img.zoomed:active {
+      cursor: grabbing;
+    }
+
+    .lb-zoom-controls {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(24, 24, 27, 0.88);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      border-radius: 30px;
+      padding: 5px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 50;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    }
+    .lb-zoom-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: #fff;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .lb-zoom-btn:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+    .lb-zoom-level {
+      font-size: 12px;
+      color: #a1a1aa;
+      font-weight: 600;
+      min-width: 44px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .lb-zoom-level:hover {
+      color: #fff;
     }
     .nav-btn {
       position: absolute;
@@ -378,45 +623,82 @@
     .nav-next { right: 24px; }
     
     .empty-state {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100%;
       color: var(--text-muted);
       text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      width: 100%;
+      max-width: 440px;
+      padding: 32px 24px;
     }
     .empty-state svg {
-      width: 64px;
-      height: 64px;
-      margin-bottom: 24px;
-      opacity: 0.5;
+      width: 60px;
+      height: 60px;
+      margin-bottom: 20px;
+      stroke: #8b5cf6;
+      opacity: 0.7;
+      filter: drop-shadow(0 0 16px rgba(139, 92, 246, 0.45));
     }
     .empty-state h2 {
-      color: var(--text);
-      margin: 0 0 12px 0;
+      color: #f1f5f9;
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      letter-spacing: -0.2px;
     }
-    .empty-state p { margin: 0; max-width: 300px; line-height: 1.5; }
+    .empty-state p {
+      margin: 0;
+      max-width: 320px;
+      line-height: 1.5;
+      font-size: 13.5px;
+      color: #94a3b8;
+    }
 
     #selection-toolbar {
       position: absolute;
-      bottom: 32px;
+      bottom: 28px;
       left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: rgba(24, 24, 27, 0.95);
-      border: 1px solid var(--border);
-      padding: 12px 24px;
+      transform: translateX(-50%) translateY(120px);
+      background: linear-gradient(180deg, rgba(24, 26, 38, 0.94) 0%, rgba(14, 15, 22, 0.98) 100%);
+      border: 1px solid rgba(167, 139, 250, 0.35);
+      padding: 10px 22px;
       border-radius: 100px;
       display: flex;
       align-items: center;
-      gap: 24px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-      backdrop-filter: blur(12px);
-      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      gap: 20px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 30px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(24px);
+      transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       z-index: 90;
     }
     #selection-toolbar.active {
       transform: translateX(-50%) translateY(0);
+    }
+    .selection-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #a78bfa;
+      box-shadow: 0 0 10px #8b5cf6, 0 0 18px #8b5cf6;
+      animation: pulse-dot 1.8s infinite ease-in-out;
+      display: inline-block;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 0.6; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+    .btn-toolbar-action {
+      padding: 6px 14px;
+      font-size: 12px;
+      border-radius: 8px;
     }
 
     #zip-progress-overlay {
@@ -485,30 +767,51 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
         Gallery
       </h1>
-      <div style="font-size:13px; color:var(--text-muted);" id="stats-label">Loading...</div>
+      <div style="display:flex; align-items:center; gap:16px;">
+        <div id="storage-badge" style="display:inline-flex; align-items:center; gap:6px; background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.3); border-radius:12px; padding:4px 10px; font-size:11px; color:#c4b5fd; font-weight:500;" title="High-Speed Browser Media Storage">⚡ OPFS Storage</div>
+        <div style="font-size:13px; color:var(--text-muted);" id="stats-label">Loading...</div>
+      </div>
     </header>
     
     <div class="toolbar">
-      <div class="toolbar-group">
+      <div class="toolbar-group" style="flex:1; overflow-x:auto;">
         <div class="filter-pills">
           <button class="filter-pill active" data-type="all">All</button>
           <button class="filter-pill" data-type="image">Images</button>
           <button class="filter-pill" data-type="video">Videos</button>
+          <button class="filter-pill" data-type="today">Today</button>
+          <button class="filter-pill" data-type="week">This Week</button>
+          <button class="filter-pill" data-type="favorites">⭐ Favorites</button>
         </div>
-        <input type="text" class="search-input" id="search-input" placeholder="Search media...">
+        <input type="text" class="search-input" id="search-input" placeholder="Search title, URL, domain...">
       </div>
       <div class="toolbar-group">
         <select class="select-dropdown" id="select-group">
-          <option value="url">Group: Source URL</option>
-          <option value="date">Group: Date</option>
-          <option value="none">Group: None</option>
+          <option value="domain">Group: Source Domain</option>
+          <option value="url">Group: Exact URL / Webpage</option>
+          <option value="date">Group: Date Captured</option>
+          <option value="type">Group: Media Type</option>
+          <option value="size">Group: File Size</option>
+          <option value="none">Group: None (Flat Grid)</option>
         </select>
         <select class="select-dropdown" id="select-sort">
-          <option value="newest">Sort: Newest</option>
-          <option value="oldest">Sort: Oldest</option>
+          <option value="newest">Sort: Date (Newest First)</option>
+          <option value="oldest">Sort: Date (Oldest First)</option>
+          <option value="name_asc">Sort: Name / Domain (A → Z)</option>
+          <option value="name_desc">Sort: Name / Domain (Z → A)</option>
+          <option value="url_asc">Sort: Full URL (A → Z)</option>
+          <option value="size_desc">Sort: Size (Largest First)</option>
+          <option value="size_asc">Sort: Size (Smallest First)</option>
+          <option value="type">Sort: Media Type</option>
         </select>
-        <button class="btn btn-secondary" id="btn-toggle-select">Select Mode</button>
-        <button class="btn btn-danger" id="btn-clear-all">Clear All</button>
+        <button class="btn btn-secondary btn-select-mode" id="btn-toggle-select" title="Toggle batch selection">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          <span>Select Mode</span>
+        </button>
+        <button class="btn btn-danger btn-clear-all" id="btn-clear-all" title="Clear entire gallery">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          <span>Clear All</span>
+        </button>
       </div>
     </div>
     
@@ -516,18 +819,33 @@
       <div id="content-area"></div>
       <div id="empty-state" class="empty-state" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-        <h2>Your gallery is empty</h2>
-        <p>Images and videos captured while browsing will appear here.</p>
+        <h2 id="empty-state-title">Your gallery is empty</h2>
+        <p id="empty-state-desc">Images and videos captured while browsing will appear here.</p>
       </div>
     </div>
     
     <div id="selection-toolbar">
-      <div id="selection-count" style="font-weight:600;">0 selected</div>
-      <div style="display:flex; gap:12px;">
-        <button class="btn btn-secondary" id="btn-select-all">Select All</button>
-        <button class="btn" id="btn-download-selected">Download</button>
-        <button class="btn btn-danger" id="btn-delete-selected">Delete</button>
-        <button class="btn btn-secondary" id="btn-cancel-select">Cancel</button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="selection-indicator-dot"></span>
+        <div id="selection-count" style="font-weight:600; font-size:13px; color:#f1f5f9;">0 selected</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-secondary btn-toolbar-action" id="btn-select-all">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>Select All</span>
+        </button>
+        <button class="btn btn-toolbar-action" id="btn-download-selected">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Download</span>
+        </button>
+        <button class="btn btn-danger btn-toolbar-action" id="btn-delete-selected">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          <span>Delete</span>
+        </button>
+        <button class="btn btn-secondary btn-toolbar-action" id="btn-cancel-select">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <span>Cancel</span>
+        </button>
       </div>
     </div>
   </div>
@@ -535,17 +853,29 @@
   <div id="lightbox">
     <div class="lightbox-toolbar">
       <div class="lightbox-meta" id="lightbox-meta"></div>
-      <div style="display:flex; gap:12px;">
+      <div style="display:flex; align-items:center; gap:12px;">
         <button class="icon-btn" id="btn-lb-download" title="Download"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>
         <button class="icon-btn danger" id="btn-lb-delete" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
         <button class="icon-btn" id="btn-lb-close" title="Close (Esc)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
       </div>
     </div>
-    <div class="lightbox-content">
+    <div class="lightbox-content" id="lightbox-content">
       <button class="nav-btn nav-prev" id="btn-lb-prev"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-      <img id="lb-img" class="lightbox-media" src="" style="display:none;">
-      <video id="lb-vid" class="lightbox-media" src="" controls style="display:none;"></video>
+      
+      <div class="lb-media-container" id="lb-media-container">
+        <img id="lb-img" class="lightbox-media" src="" style="display:none;" draggable="false">
+        <video id="lb-vid" class="lightbox-media" src="" controls style="display:none;"></video>
+      </div>
+
       <button class="nav-btn nav-next" id="btn-lb-next"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+
+      <!-- Mouse Scroll Zoom Toolbar -->
+      <div class="lb-zoom-controls" id="lb-zoom-controls" style="display:none;">
+        <button class="lb-zoom-btn" id="btn-zoom-out" title="Zoom Out (Scroll Down)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg></button>
+        <span class="lb-zoom-level" id="lb-zoom-level" title="Double-click image or click here to reset zoom">100%</span>
+        <button class="lb-zoom-btn" id="btn-zoom-in" title="Zoom In (Scroll Up)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg></button>
+        <button class="lb-zoom-btn" id="btn-zoom-reset" title="Reset Zoom (100%)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg></button>
+      </div>
     </div>
   </div>
 
@@ -561,6 +891,7 @@
   </div>
 
   <script src="jszip.min.js"></script>
+  <script src="media-engine.js"></script>
   <script src="db.js"></script>
   <script src="screenshots.js"></script>
 </body>

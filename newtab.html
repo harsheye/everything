@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Bypass Chromium native Omnibox focus grab on custom New Tab page
+    if (!window.location.search.includes('focus')) {
+      window.location.search = '?focus';
+      document.documentElement.style.display = 'none';
+    }
+  </script>
   <title>New Tab</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -301,6 +308,8 @@
   </style>
 </head>
 <body>
+  <!-- Autofocus anchor ensuring document receives active focus from Chromium -->
+  <input id="newtab-autofocus-anchor" autofocus style="position:fixed; opacity:0; pointer-events:none; top:-999px; left:-999px; width:1px; height:1px;" tabindex="-1">
   <!-- Ambient background glow blobs -->
   <div class="popup-glow blob-1"></div>
   <div class="popup-glow blob-2"></div>

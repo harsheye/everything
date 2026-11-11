@@ -1,4 +1,5 @@
 // Background Service Worker for Smart Command Palette Productivity Platform
+importScripts("media-engine.js");
 importScripts("db.js");
 
 // Open the onboarding dashboard automatically upon installation
@@ -22,6 +23,17 @@ function dataUrlToUint8Array(dataUrl) {
   return bytes;
 }
 
+// Convert an ArrayBuffer / Uint8Array to a data URL
+function arrayBufferToDataUrl(buffer, mimeType = 'image/png') {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return `data:${mimeType};base64,` + btoa(binary);
+}
+
 // Assemble accumulated chunks into a video blob and save to gallery DB
 async function finalizeRecording(sourceUrl) {
   if (recordingChunks.length === 0) {
@@ -33,7 +45,27 @@ async function finalizeRecording(sourceUrl) {
   const parts = recordingChunks.map(dataUrlToUint8Array);
   const blob = new Blob(parts, { type: 'video/webm' });
   
-  // Convert final blob to data URL for DB storage
+  // High-performance path: Save media payload into OPFS/Cache and keep IDB metadata-only
+  if (typeof MediaEngine !== 'undefined') {
+    try {
+      const metaRecord = await MediaEngine.saveMedia(blob, {
+        sourceUrl: sourceUrl || recordingSourceUrl || 'unknown',
+        type: 'video',
+        timestamp: Date.now()
+      });
+      await CommandPaletteDB.put("screenshots", metaRecord);
+      
+      recordingChunks = [];
+      recordingSourceUrl = '';
+      currentRecordingState = 'idle';
+      currentRecordingTabId = null;
+      return;
+    } catch (e) {
+      console.warn("[background] MediaEngine saveMedia failed, falling back to direct data URL:", e);
+    }
+  }
+
+  // Convert final blob to data URL for DB storage (legacy fallback)
   const reader = new FileReader();
   const dataUrl = await new Promise(resolve => {
     reader.onloadend = () => resolve(reader.result);
@@ -41,7 +73,7 @@ async function finalizeRecording(sourceUrl) {
   });
   
   await CommandPaletteDB.put("screenshots", {
-    id: Date.now().toString() + Math.random().toString(36).substring(2, 8),
+    id: Date.now(),
     content: dataUrl,
     timestamp: Date.now(),
     sourceUrl: sourceUrl || recordingSourceUrl || 'unknown',
@@ -176,6 +208,60 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     sendResponse({ success: true });
     return;
+  }
+
+  if (message.action === "save_recorded_video") {
+    (async () => {
+      try {
+        const { dataUrl, thumbDataUrl, width, height, sourceUrl } = message;
+        if (!dataUrl) {
+          sendResponse({ error: "Empty video payload" });
+          return;
+        }
+
+        const id = Date.now();
+        const videoBlob = MediaEngine.dataUrlToBlob(dataUrl);
+        const thumbBlob = thumbDataUrl ? MediaEngine.dataUrlToBlob(thumbDataUrl) : null;
+
+        let metaRecord = null;
+        if (typeof MediaEngine !== 'undefined') {
+          try {
+            metaRecord = await MediaEngine.saveMedia(videoBlob || dataUrl, {
+              id: id,
+              sourceUrl: sourceUrl || 'unknown',
+              type: 'video',
+              timestamp: id,
+              width: width || 0,
+              height: height || 0,
+              thumbBlob: thumbBlob,
+              title: 'Video Recording'
+            });
+          } catch (meErr) {
+            console.warn("[background] MediaEngine saveMedia error:", meErr);
+          }
+        }
+
+        if (!metaRecord) {
+          metaRecord = {
+            id: id,
+            content: dataUrl,
+            sourceUrl: sourceUrl || 'unknown',
+            type: 'video',
+            timestamp: id,
+            width: width || 0,
+            height: height || 0,
+            title: 'Video Recording'
+          };
+        }
+
+        await CommandPaletteDB.put("screenshots", metaRecord);
+        sendResponse({ success: true, id: metaRecord.id });
+      } catch (err) {
+        console.error("[background] save_recorded_video error:", err);
+        sendResponse({ error: err.message || "Failed to save video" });
+      }
+    })();
+    return true; // Keep message channel open for async response!
   }
 
   if (message.action === "recording_start") {
@@ -502,6 +588,66 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Precision Video Rect Cropping (bypasses CORS / DRM / live stream canvas tainting)
+  if (message.action === "capture_video_crop") {
+    chrome.tabs.captureVisibleTab(null, { format: "png" }, async (dataUrl) => {
+      if (chrome.runtime.lastError || !dataUrl) {
+        sendResponse({ error: chrome.runtime.lastError?.message || "Failed to capture visible tab" });
+        return;
+      }
+      try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const bitmap = await createImageBitmap(blob);
+        
+        const { x = 0, y = 0, width = bitmap.width, height = bitmap.height, dpr = 1 } = message.rect || {};
+        const cropX = Math.max(0, Math.min(bitmap.width - 1, Math.round(x * dpr)));
+        const cropY = Math.max(0, Math.min(bitmap.height - 1, Math.round(y * dpr)));
+        const cropW = Math.max(1, Math.min(bitmap.width - cropX, Math.round(width * dpr)));
+        const cropH = Math.max(1, Math.min(bitmap.height - cropY, Math.round(height * dpr)));
+        
+        const canvas = new OffscreenCanvas(cropW, cropH);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+        
+        const croppedBlob = await canvas.convertToBlob({ type: 'image/png' });
+        const buffer = await croppedBlob.arrayBuffer();
+        const croppedDataUrl = arrayBufferToDataUrl(buffer, 'image/png');
+        
+        // Save to CommandPaletteDB directly in background!
+        try {
+          if (typeof MediaEngine !== 'undefined') {
+            const meta = await MediaEngine.saveMedia(croppedBlob, {
+              sourceUrl: message.sourceUrl || '',
+              type: 'image',
+              title: message.title || 'Video Screenshot',
+              timestamp: Date.now()
+            });
+            await CommandPaletteDB.put("screenshots", meta);
+          } else {
+            await CommandPaletteDB.put("screenshots", {
+              id: Date.now(),
+              content: croppedDataUrl,
+              sourceUrl: message.sourceUrl || '',
+              type: 'image',
+              title: message.title || 'Video Screenshot',
+              timestamp: Date.now()
+            });
+          }
+        } catch (dbErr) {
+          console.warn("[background] Error saving screenshot to DB:", dbErr);
+        }
+        
+        sendResponse({ success: true, dataUrl: croppedDataUrl });
+      } catch (err) {
+        console.error("[background] capture_video_crop error:", err);
+        // Fallback: send original dataUrl
+        sendResponse({ success: true, dataUrl });
+      }
+    });
+    return true;
+  }
+
   // --- ALARMS FOR TIMERS ---
   if (message.action === "set_timer") {
     const alarmName = `timer_${Date.now()}|${message.label || "Timer"}`;
@@ -566,7 +712,10 @@ function getDomain(urlString) {
 
 function handleDbOp(message, sendResponse) {
   const { op, storeName, id, data, limit } = message;
-  if (op === "get") {
+  if (op === "addScreenshot") {
+    const { content, ...metadata } = data || {};
+    CommandPaletteDB.addScreenshot(content, metadata).then(sendResponse);
+  } else if (op === "get") {
     CommandPaletteDB.get(storeName, id).then(sendResponse);
   } else if (op === "getAll") {
     CommandPaletteDB.getAll(storeName).then(sendResponse);

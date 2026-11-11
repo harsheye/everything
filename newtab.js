@@ -162,32 +162,84 @@ document.getElementById("tool-pdf").addEventListener("click", () => {
   chrome.tabs.create({ url: "pdf.html" });
 });
 
-// Automatically open the palette on tab load
-window.addEventListener("DOMContentLoaded", () => {
-  setTimeout(() => {
-    if (typeof toggleCommandPalette === "function") {
-      toggleCommandPalette();
+// Automatically open the palette on tab load and secure search bar focus
+function initNewTabPalette() {
+  if (typeof toggleCommandPalette === "function") {
+    toggleCommandPalette();
+    
+    const rootEl = document.getElementById("smart-command-palette-root");
+    if (rootEl && rootEl.shadowRoot) {
+      const closeBtn = rootEl.shadowRoot.querySelector(".cc-close");
+      if (closeBtn) closeBtn.style.display = "none";
       
-      const rootEl = document.getElementById("smart-command-palette-root");
-      if (rootEl && rootEl.shadowRoot) {
-        const closeBtn = rootEl.shadowRoot.querySelector(".cc-close");
-        if (closeBtn) closeBtn.style.display = "none";
-        
-        const input = rootEl.shadowRoot.querySelector(".cc-search-input");
-        if (input) {
-          input.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              e.stopPropagation();
-            }
-          });
-          // Focus input repeatedly to grab focus from browser address bar
-          setTimeout(() => input.focus(), 50);
-          setTimeout(() => input.focus(), 150);
-          setTimeout(() => input.focus(), 300);
-          setTimeout(() => input.focus(), 500);
-        }
+      const input = rootEl.shadowRoot.querySelector(".cc-search-input");
+      if (input) {
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        });
+
+        const focusInput = () => {
+          if (document.activeElement !== input) {
+            input.focus();
+          }
+        };
+
+        // Aggressively capture cursor in the extension search bar across frame renders
+        focusInput();
+        requestAnimationFrame(focusInput);
+        setTimeout(focusInput, 20);
+        setTimeout(focusInput, 60);
+        setTimeout(focusInput, 150);
+        setTimeout(focusInput, 300);
       }
     }
-  }, 50);
+  }
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", initNewTabPalette);
+} else {
+  initNewTabPalette();
+}
+
+// When tab gains focus, return cursor to the search bar
+window.addEventListener("focus", () => {
+  const rootEl = document.getElementById("smart-command-palette-root");
+  if (rootEl && rootEl.shadowRoot) {
+    const input = rootEl.shadowRoot.querySelector(".cc-search-input");
+    if (input) input.focus();
+  }
+});
+
+// Click anywhere on wallpaper/neutral area focuses the search bar
+document.body.addEventListener("click", (e) => {
+  if (e.target.closest("button, a, input, textarea, .glass-panel, .bg-settings-btn, .bg-modal, .site-card")) {
+    return;
+  }
+  const rootEl = document.getElementById("smart-command-palette-root");
+  if (rootEl && rootEl.shadowRoot) {
+    const input = rootEl.shadowRoot.querySelector(".cc-search-input");
+    if (input) input.focus();
+  }
+});
+
+// Any typing on empty dashboard space instantly redirects to the command palette search input
+window.addEventListener("keydown", (e) => {
+  const active = document.activeElement;
+  if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)) {
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key.length > 1 && e.key !== "Backspace") return;
+
+  const rootEl = document.getElementById("smart-command-palette-root");
+  if (rootEl && rootEl.shadowRoot) {
+    const input = rootEl.shadowRoot.querySelector(".cc-search-input");
+    if (input && document.activeElement !== input) {
+      input.focus();
+    }
+  }
 });

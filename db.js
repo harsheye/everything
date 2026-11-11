@@ -136,6 +136,17 @@ class CommandPaletteDB {
         chrome.runtime.sendMessage({ action: "db_op", op: "delete", storeName, id }, resolve);
       });
     }
+    // High-performance cleanup: remove associated OPFS/Cache files if deleting screenshot
+    if (storeName === "screenshots" && typeof MediaEngine !== "undefined") {
+      try {
+        const item = await this.get("screenshots", id);
+        if (item) {
+          await MediaEngine.deleteMedia(item);
+        }
+      } catch (e) {
+        console.warn("[CommandPaletteDB] Error deleting media from MediaEngine:", e);
+      }
+    }
     return this.performTx(storeName, "readwrite", (store) => {
       let request = store.delete(id);
       return new Promise((resolve) => {
@@ -149,6 +160,14 @@ class CommandPaletteDB {
       return new Promise((resolve) => {
         chrome.runtime.sendMessage({ action: "db_op", op: "clear", storeName }, resolve);
       });
+    }
+    // High-performance cleanup: purge all OPFS/Cache media
+    if (storeName === "screenshots" && typeof MediaEngine !== "undefined") {
+      try {
+        await MediaEngine.clearAll();
+      } catch (e) {
+        console.warn("[CommandPaletteDB] Error clearing MediaEngine storage:", e);
+      }
     }
     return this.performTx(storeName, "readwrite", (store) => {
       store.clear();
@@ -196,23 +215,74 @@ class CommandPaletteDB {
     });
   }
 
-  // Screenshots
+  // Screenshots - High-performance storage via MediaEngine (OPFS/Cache) + metadata-only IDB
   static async addScreenshot(dataUrl, metadata = {}) {
     if (isContentScript) {
       return new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: "db_op", op: "put", storeName: "screenshots", data: {
+        chrome.runtime.sendMessage({ action: "db_op", op: "addScreenshot", data: {
           content: dataUrl,
           timestamp: Date.now(),
           ...metadata
         } }, resolve);
       });
     }
+
+    // Modern high-performance path: Store payload in OPFS/Cache and keep IDB ultra-light
+    if (typeof MediaEngine !== "undefined") {
+      try {
+        const metaRecord = await MediaEngine.saveMedia(dataUrl, metadata);
+        return this.put("screenshots", metaRecord);
+      } catch (err) {
+        console.warn("[CommandPaletteDB] MediaEngine failed to save screenshot, falling back:", err);
+      }
+    }
+
     const item = {
       content: dataUrl,
       timestamp: Date.now(),
       ...metadata
     };
     return this.put("screenshots", item);
+  }
+
+  /**
+   * Save a large video Blob directly to IndexedDB WITHOUT going through the background
+   * message bus (which has a ~64 MB serialization limit that causes recordings to silently fail).
+   * Content scripts have direct IDB access, so we open it raw here.
+   */
+  static async saveVideoBlob(videoBlob, metadata = {}) {
+    // Build a lightweight meta record – store the Blob object directly in IDB
+    // (IDB can store Blob natively, no base64 needed)
+    const id = Date.now();
+    const record = {
+      id,
+      type: 'video',
+      timestamp: id,
+      title: metadata.title || 'Video Recording',
+      sourceUrl: metadata.sourceUrl || '',
+      width: metadata.width || 0,
+      height: metadata.height || 0,
+      size: videoBlob.size,
+      mimeType: videoBlob.type || 'video/webm',
+      // Store the raw Blob – IDB handles large binary objects efficiently
+      content: videoBlob,
+    };
+
+    // Attach thumbnail dataUrl if available (small, safe to store inline)
+    if (metadata.thumbDataUrl) {
+      record.thumbDataUrl = metadata.thumbDataUrl;
+    }
+
+    // Open IDB directly (works in both content script and extension page contexts)
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('screenshots', 'readwrite');
+      const store = tx.objectStore('screenshots');
+      const req = store.put(record);
+      tx.oncomplete = () => resolve(record);
+      tx.onerror = () => reject(tx.error);
+      req.onerror = () => reject(req.error);
+    });
   }
 
   static async getScreenshots(limit = 100) {

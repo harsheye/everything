@@ -69,141 +69,3214 @@ const DB = typeof CommandPaletteDB !== 'undefined' ? CommandPaletteDB : {
   async getNotes() { return []; }
 };
 
-// --- INITIALIZE ON LOAD ---
-document.addEventListener("DOMContentLoaded", () => {
-  preloadStats();
+// Video Screenshot Overlay Logic
+// =============================================================
+// SMART VIDEO CONTROLLER & HUD (PROFILES, CAPTURE, ZOOM, PICTURE, AMBIENCE, FLUIDITY)
+// =============================================================
+const SmartVideoHUD = {
+  hostEl: null,
+  shadow: null,
+  activeVideo: null,
+  isPillHovered: false,
+  isOpen: false,
+  activeTab: 'picture',
+  hideTimer: null,
+  mouseInactivityTimer: null,
+  fpsTracker: {
+    lastTime: performance.now(),
+    frameCount: 0,
+    fps: 60,
+    active: false,
+    rafId: null
+  },
+  ambience: {
+    canvas: null,
+    ctx: null,
+    intervalId: null
+  },
+  profiles: {
+    lift: {
+      name: 'Lift',
+      lighting: 15,
+      shadows: 10,
+      contrast: 15,
+      sharpness: 10,
+      vibrance: 10,
+      hdrBoost: 0,
+      ambienceAudioPulse: 0
+    },
+    movie: {
+      name: 'Movie',
+      lighting: 20,
+      shadows: 15,
+      contrast: 25,
+      sharpness: 15,
+      vibrance: 20,
+      hdrBoost: 10,
+      ambienceAudioPulse: 0
+    },
+    game: {
+      name: 'Game',
+      lighting: 25,
+      shadows: 20,
+      contrast: 30,
+      sharpness: 40,
+      vibrance: 30,
+      hdrBoost: 20,
+      ambienceAudioPulse: 30
+    },
+    music: {
+      name: 'Music',
+      lighting: 10,
+      shadows: 10,
+      contrast: 20,
+      sharpness: 10,
+      vibrance: 35,
+      hdrBoost: 15,
+      ambienceAudioPulse: 60
+    },
+    sport: {
+      name: 'Sport',
+      lighting: 20,
+      shadows: 15,
+      contrast: 25,
+      sharpness: 45,
+      vibrance: 15,
+      hdrBoost: 10,
+      ambienceAudioPulse: 0
+    },
+    none: {
+      name: 'None',
+      lighting: 0,
+      shadows: 0,
+      contrast: 0,
+      sharpness: 0,
+      vibrance: 0,
+      hdrBoost: 0,
+      ambienceAudioPulse: 0
+    }
+  },
+  settings: {
+    activeProfile: 'none',
+    pictureEnabled: false,
+    lighting: 0,
+    shadows: 0,
+    contrast: 0,
+    sharpness: 0,
+    vibrance: 0,
+    hdrBoost: 0,
+    zoomEnabled: false,
+    zoomScale: 100, // 100% -> x1.00
+    elasticStretch: 0, // 0%
+    removeBlackbars: false,
+    aspectRatio: '16:9',
+    panX: 0,
+    panY: 0,
+    panActive: false,
+    ambienceEnabled: false,
+    ambienceSpread: 100,
+    ambienceIntensity: 100,
+    ambienceBlur: 45,
+    ambienceSyncRate: 90,
+    ambienceAudioPulse: 0,
+    keepBlackBars: false,
+    fluidityEnabled: true,
+    pinStats: false
+  },
 
-  // Check if we came from Google Search fallback
-  if (window.location.hash.includes("focus-palette=true")) {
-    // Remove the hash immediately
-    history.replaceState(null, null, window.location.pathname + window.location.search);
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const q = urlParams.get("q") || "";
-    
-    // Open the palette and focus the input field with the query
-    setTimeout(() => {
-      if (!ccRoot) {
-        createCommandPalette();
+  _elasticMapUrl: null,
+
+  getElasticMapDataUrl(strength = 1.0) {
+    try {
+      const cvs = document.createElement('canvas');
+      cvs.width = 256;
+      cvs.height = 4;
+      const ctx = cvs.getContext('2d');
+      const imgData = ctx.createImageData(256, 4);
+      const data = imgData.data;
+
+      for (let x = 0; x < 256; x++) {
+        const u = x / 255;
+        const normX = (u - 0.5) * 2; // -1 to +1
+        const absX = Math.abs(normX);
+
+        // Center zone: counter-compress to keep 1:1; edges relax to stretch
+        let disp = 0;
+        if (absX < 0.48) {
+          disp = -normX * 0.72 * strength;
+        } else {
+          const t = (absX - 0.48) / 0.52;
+          disp = -Math.sign(normX) * (0.72 * (1 - t * t)) * strength;
+        }
+
+        const r = Math.max(0, Math.min(255, Math.round(128 + disp * 127)));
+
+        for (let y = 0; y < 4; y++) {
+          const idx = (y * 256 + x) * 4;
+          data[idx] = r;       // R channel controls horizontal displacement
+          data[idx + 1] = 128; // G channel controls vertical (0 displacement)
+          data[idx + 2] = 128;
+          data[idx + 3] = 255;
+        }
       }
-      openCommandPalette();
-      if (q) {
-        ccSearchInput.value = q;
-        ccSearchInput.setSelectionRange(0, q.length);
-        handleSearchInputChange();
+      ctx.putImageData(imgData, 0, 0);
+      return cvs.toDataURL();
+    } catch(e) {
+      return '';
+    }
+  },
+
+  ensureElasticSvgFilter() {
+    if (document.getElementById('cc-elastic-svg-root')) return;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'cc-elastic-svg-root';
+    svg.style.cssText = 'position:fixed; top:-9999px; left:-9999px; width:0; height:0; pointer-events:none;';
+    svg.innerHTML = `
+      <defs>
+        <filter id="cc-elastic-filter" x="-20%" y="0%" width="140%" height="100%" color-interpolation-filters="sRGB">
+          <feImage id="cc-elastic-fe-image" href="" result="warpMap" preserveAspectRatio="none"/>
+          <feDisplacementMap id="cc-elastic-fe-disp" in="SourceGraphic" in2="warpMap" scale="0" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+    `;
+    (document.body || document.documentElement).appendChild(svg);
+  },
+
+  updateElasticFilter(elastic) {
+    this.ensureElasticSvgFilter();
+    const dispEl = document.getElementById('cc-elastic-fe-disp');
+    const imgEl = document.getElementById('cc-elastic-fe-image');
+    if (!dispEl || !imgEl) return;
+
+    if (!this._elasticMapUrl) {
+      this._elasticMapUrl = this.getElasticMapDataUrl(1.0);
+    }
+    if (imgEl.getAttribute('href') !== this._elasticMapUrl) {
+      imgEl.setAttribute('href', this._elasticMapUrl);
+    }
+
+    const vW = (this.activeVideo ? (this.activeVideo.videoWidth || this.activeVideo.clientWidth) : 1920) || 1920;
+    const dispScale = Math.round(vW * 0.18 * elastic);
+    dispEl.setAttribute('scale', dispScale);
+  },
+
+  getDefaultSettings() {
+    return {
+      activeProfile: 'none',
+      pictureEnabled: false,
+      lighting: 0,
+      shadows: 0,
+      contrast: 0,
+      sharpness: 0,
+      vibrance: 0,
+      hdrBoost: 0,
+      zoomEnabled: false,
+      autoZoomToFill: false, // Auto-rescale zoom dynamically on player resize/fullscreen
+      autoElasticStretch: false, // Auto-rescale elastic stretch dynamically on player resize/fullscreen
+      zoomScale: 100, // 100% -> x1.00
+      elasticStretch: 0, // 0%
+      removeBlackbars: false,
+      aspectRatio: '16:9',
+      panX: 0,
+      panY: 0,
+      panActive: false,
+      ambienceEnabled: false,
+      ambienceSpread: 100,
+      ambienceIntensity: 100,
+      ambienceBlur: 45,
+      ambienceSyncRate: 90,
+      ambienceAudioPulse: 0,
+      keepBlackBars: false,
+      fluidityEnabled: true,
+      pinStats: false
+    };
+  },
+  resizeObserver: null,
+
+  loadSettings() {
+    // On page reload, automatically reset all settings to default
+    try {
+      const key = `smart_vid_${window.location.hostname}`;
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } catch (e) {}
+    this.settings = this.getDefaultSettings();
+  },
+
+  saveSettings() {
+    // Settings remain active during the page session and reset automatically on page reload
+  },
+
+  init() {
+    if (this.hostEl) {
+      if (!this.hostEl.isConnected) {
+        (document.fullscreenElement || document.body || document.documentElement)?.appendChild(this.hostEl);
       }
-    }, 150);
-  }
+      return;
+    }
+    this.loadSettings();
 
-  // Initialize the hover video screenshot overlay
-  if (EXT_SETTINGS.enableScreenshots) {
-    initVideoOverlay();
-  }
-});
+    this.hostEl = document.createElement('div');
+    this.hostEl.id = 'smart-video-hud-root';
+    this.hostEl.style.cssText = 'position:fixed !important; z-index:2147483647 !important; top:0 !important; left:0 !important; width:0 !important; height:0 !important; pointer-events:none !important; overflow:visible !important; display:block !important;';
+    this.shadow = this.hostEl.attachShadow({ mode: 'open' });
 
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.app_settings) {
-    if (changes.app_settings.newValue && changes.app_settings.newValue.enableScreenshots === false) {
-      removeVideoOverlay();
+    const style = document.createElement('style');
+    style.textContent = `
+      * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      
+      /* Main Container positioned at top-center of active video */
+      /* Main Container positioned at top-center of active video */
+      .hud-container {
+        position: fixed;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        z-index: 2147483647;
+        user-select: none;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-50%) translateY(-6px);
+        transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      /* 1. When mouse is over video: clearly appear at top-center */
+      .hud-container.visible {
+        opacity: 0.92;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .hud-container.visible.faded {
+        opacity: 0.75;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* 2. Mouse moving close to button: full opacity */
+      .hud-container.visible.near-button {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* 3. Direct hover on button or open panel: fully active, smooth bold highlight */
+      .hud-container.mouse-close,
+      .hud-container.pill-hovered,
+      .hud-container.open,
+      .hud-container:hover {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        transform: translateX(-50%) translateY(0) !important;
+      }
+
+      /* 3. Button / Pill Base State (Compact rounded square/capsule) */
+      .hud-pill {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 38px;
+        width: 38px;
+        border-radius: 19px;
+        background: #090a10;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+                    inset 0 -1px 0 rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(24px) saturate(180%);
+        -webkit-backdrop-filter: blur(24px) saturate(180%);
+        color: #f1f5f9;
+        cursor: pointer;
+        transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+                    height 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+                    gap 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+                    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+                    border-radius 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+                    background 0.4s ease,
+                    border-color 0.4s ease,
+                    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        overflow: visible;
+        white-space: nowrap;
+      }
+
+      /* Inner shine & glossy reflection wrapper matching the reference image */
+      .hud-pill-bg {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* Glossy top bevel reflection */
+      .hud-pill-bg::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 50%;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.01) 100%);
+        border-radius: 22px 22px 0 0;
+        opacity: 0;
+        transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .hud-pill:hover .hud-pill-bg::before,
+      .hud-container.pill-hovered .hud-pill-bg::before {
+        opacity: 1;
+      }
+
+      /* Sleek shining light shimmer sweep across the pill */
+      .hud-pill-bg::after {
+        content: '';
+        position: absolute;
+        top: -60%;
+        left: -80%;
+        width: 45%;
+        height: 220%;
+        background: linear-gradient(
+          75deg,
+          transparent 20%,
+          rgba(255, 255, 255, 0.15) 45%,
+          rgba(255, 255, 255, 0.5) 50%,
+          rgba(255, 255, 255, 0.15) 55%,
+          transparent 80%
+        );
+        transform: rotate(25deg);
+        opacity: 0;
+        transition: opacity 0.4s ease;
+      }
+      .hud-pill:hover .hud-pill-bg::after,
+      .hud-container.pill-hovered .hud-pill-bg::after {
+        opacity: 1;
+        animation: hud-shine-sweep 3s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      @keyframes hud-shine-sweep {
+        0% { left: -80%; }
+        45% { left: 160%; }
+        100% { left: 160%; }
+      }
+
+
+
+      /* 4. Mouse directly over button: EXPANDS, SCALES BIGGER, BOLD BLACK BG & METALLIC SHINE */
+      .hud-pill:hover,
+      .hud-container.pill-hovered .hud-pill,
+      .hud-container.mouse-close .hud-pill {
+        width: auto;
+        height: 42px;
+        border-radius: 22px;
+        padding: 0 14px;
+        gap: 10px;
+        transform: scale(1.08);
+        background: #06070a; /* Bold deep black background */
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        box-shadow: 
+          0 14px 40px rgba(0, 0, 0, 0.9),
+          0 0 20px rgba(255, 255, 255, 0.16),
+          inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.9),
+          inset 0 -1.5px 1px 0 rgba(255, 255, 255, 0.45);
+      }
+
+      .hud-pill-icon {
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: #f1f5f9;
+        position: relative;
+        z-index: 1;
+      }
+      .hud-pill-divider {
+        width: 1px;
+        height: 18px;
+        background: rgba(255, 255, 255, 0.28);
+        opacity: 0;
+        transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        flex-shrink: 0;
+        position: relative;
+        z-index: 1;
+      }
+      .hud-pill:hover .hud-pill-divider,
+      .hud-container.pill-hovered .hud-pill-divider,
+      .hud-container.mouse-close .hud-pill-divider {
+        opacity: 1;
+      }
+
+      /* Quick actions inside expanded pill: icon-only buttons */
+      .hud-pill-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 0;
+        max-width: 0;
+        overflow: hidden;
+        transition: opacity 0.35s 0.08s cubic-bezier(0.22, 1, 0.36, 1),
+                    max-width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        position: relative;
+        z-index: 1;
+      }
+      .hud-pill:hover .hud-pill-actions,
+      .hud-container.pill-hovered .hud-pill-actions,
+      .hud-container.mouse-close .hud-pill-actions {
+        opacity: 1;
+        max-width: 220px;
+      }
+
+      .hud-pill-btn-shot {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #ffffff;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        padding: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        flex-shrink: 0;
+      }
+      .hud-pill-btn-shot:hover {
+        background: rgba(139, 92, 246, 0.45);
+        border-color: #a78bfa;
+        color: #fff;
+        transform: scale(1.15);
+        box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
+      }
+
+      .hud-pill-btn-rec {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        color: #fca5a5;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        padding: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        flex-shrink: 0;
+      }
+      .hud-rec-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+        display: inline-block;
+        transition: all 0.2s;
+      }
+      .hud-pill-btn-rec:hover {
+        background: rgba(239, 68, 68, 0.45);
+        border-color: #ef4444;
+        transform: scale(1.15);
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+      }
+      .hud-pill-btn-rec:hover .hud-rec-dot {
+        transform: scale(1.15);
+      }
+      .hud-pill-rec-live {
+        background: #ef4444 !important;
+        border-color: #ff8888 !important;
+        color: #fff !important;
+        animation: hud-pulse-red 1.2s infinite;
+      }
+
+      .hud-pill-btn-more {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #94a3b8;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        padding: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        flex-shrink: 0;
+      }
+      .hud-pill-btn-more:hover {
+        background: rgba(255, 255, 255, 0.22);
+        border-color: rgba(255, 255, 255, 0.35);
+        color: #fff;
+        transform: scale(1.15);
+      }
+
+      /* When full panel is open, pill transforms into the top bar */
+      .hud-container.open .hud-pill {
+        display: none;
+      }
+
+      /* 5. FULL SEXY GLASSMORPHIC TOP BAR (Images 1, 2, 3, 4) */
+      .hud-top-bar {
+        display: none;
+        align-items: center;
+        padding: 6px 12px;
+        background: rgba(14, 16, 23, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 26px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 1px 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(28px) saturate(200%);
+        -webkit-backdrop-filter: blur(28px) saturate(200%);
+        gap: 6px;
+        animation: hud-pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .hud-container.open .hud-top-bar {
+        display: flex;
+      }
+
+      /* Profiles Wand Capsule Button */
+      .hud-bar-profiles-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #f1f5f9;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        flex-shrink: 0;
+      }
+      .hud-bar-profiles-btn:hover,
+      .hud-bar-profiles-btn.active {
+        background: rgba(255, 255, 255, 0.16);
+        border-color: rgba(255, 255, 255, 0.28);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      }
+      .hud-profile-wand-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #ffffff;
+      }
+
+      /* Top Bar Tabs */
+      .hud-tab-item {
+        background: transparent;
+        border: 1px solid transparent;
+        color: #94a3b8;
+        padding: 6px 14px;
+        border-radius: 14px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        min-width: 72px;
+        position: relative;
+      }
+      .hud-tab-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #f1f5f9;
+      }
+      .hud-tab-item.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: #ffffff;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      }
+      .hud-tab-title {
+        font-size: 12px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .hud-tab-sub {
+        font-size: 10px;
+        color: #64748b;
+        font-weight: 500;
+        margin-top: 1px;
+      }
+      .hud-tab-item.active .hud-tab-sub {
+        color: #e2e8f0;
+      }
+      /* Active tab indicator underline bar matching Image 4 */
+      .hud-tab-indicator {
+        display: none;
+        width: 18px;
+        height: 2.5px;
+        background: #ffffff;
+        border-radius: 2px;
+        margin-top: 3px;
+        box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+      }
+      .hud-tab-item.active .hud-tab-indicator {
+        display: block;
+      }
+
+      .hud-top-right-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 2px;
+      }
+      .hud-tool-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        transition: all 0.15s;
+        flex-shrink: 0;
+      }
+      .hud-tool-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+
+      /* While dragging any slider: collapse HUD into a single sleek floating capsule (Images 1 & 2) */
+      .hud-container.slider-dragging .hud-pill,
+      .hud-container.slider-dragging .hud-top-bar,
+      .hud-container.slider-dragging .hud-row-header,
+      .hud-container.slider-dragging .hud-divider-label,
+      .hud-container.slider-dragging .hud-aspect-header,
+      .hud-container.slider-dragging .hud-aspect-grid,
+      .hud-container.slider-dragging .hud-profile-list,
+      .hud-container.slider-dragging .hud-card-action,
+      .hud-container.slider-dragging .hud-fluid-grid,
+      .hud-container.slider-dragging .hud-fluid-stat-row,
+      .hud-container.slider-dragging .hud-slider-row:not(.is-active-sliding) {
+        display: none !important;
+      }
+
+      .hud-container.slider-dragging .hud-panel-wrap {
+        width: 440px !important;
+        max-width: 90vw !important;
+        border-radius: 20px !important;
+        background: rgba(10, 12, 18, 0.94) !important;
+        border: 1px solid rgba(255, 255, 255, 0.22) !important;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      }
+
+      .hud-container.slider-dragging .hud-body-pane {
+        padding: 8px 18px !important;
+        gap: 0 !important;
+        display: flex !important;
+        max-height: none !important;
+        overflow: visible !important;
+      }
+
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        gap: 16px !important;
+        margin: 0 !important;
+      }
+
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-slider-label {
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        color: #f1f5f9 !important;
+        white-space: nowrap !important;
+        min-width: 110px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+      }
+
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-slider-label .hud-info-icon,
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-slider-label .hud-badge-ext,
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-slider-label .hud-badge-pro {
+        display: none !important;
+      }
+
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-slider-field {
+        flex: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 14px !important;
+      }
+
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-range {
+        flex: 1 !important;
+        height: 4px !important;
+      }
+
+      .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-range-val {
+        font-size: 13.5px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        min-width: 32px !important;
+        text-align: right !important;
+      }
+
+      /* FULL SEXY GLASSMORPHIC DROPDOWN PANEL (Images 1, 2, 3, 4) */
+      .hud-panel-wrap {
+        display: none;
+        flex-direction: column;
+        width: 530px;
+        max-width: 95vw;
+        border-radius: 22px;
+        background: rgba(14, 16, 23, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.85), 0 0 1px 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(32px) saturate(200%);
+        -webkit-backdrop-filter: blur(32px) saturate(200%);
+        overflow: hidden;
+        animation: hud-pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .hud-container.open .hud-panel-wrap {
+        display: flex;
+      }
+
+      /* Dropdown Panel Body */
+      .hud-body-pane {
+        padding: 20px 24px;
+        display: none;
+        flex-direction: column;
+        gap: 16px;
+        max-height: 490px;
+        overflow-y: auto;
+      }
+      .hud-body-pane.active {
+        display: flex;
+      }
+      .hud-body-pane::-webkit-scrollbar {
+        width: 5px;
+      }
+      .hud-body-pane::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+      }
+
+      /* Section Header (Title + Toggle + Badge + Reset) */
+      .hud-row-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2px;
+      }
+      .hud-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .hud-pane-title {
+        font-size: 15.5px;
+        font-weight: 700;
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .hud-info-icon {
+        font-size: 12px;
+        color: #64748b;
+        cursor: help;
+        transition: color 0.15s;
+      }
+      .hud-info-icon:hover { color: #cbd5e1; }
+
+      .hud-badge-site {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #cbd5e1;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .hud-badge-site:hover {
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+      }
+
+      .hud-badge-action {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #cbd5e1;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .hud-badge-action:hover,
+      .hud-badge-action.active {
+        background: rgba(255, 255, 255, 0.16);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.28);
+      }
+
+      .hud-btn-reset {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #94a3b8;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        transition: all 0.15s;
+      }
+      .hud-btn-reset:hover {
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+        transform: rotate(-45deg);
+      }
+
+      /* iOS Toggle Switch */
+      .hud-toggle-wrap {
+        position: relative;
+        display: inline-block;
+        width: 38px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+      .hud-toggle-wrap input { opacity: 0; width: 0; height: 0; }
+      .hud-toggle-track {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 22px;
+        transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .hud-toggle-track:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        border-radius: 50%;
+        transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+      .hud-toggle-wrap input:checked + .hud-toggle-track {
+        background: #8b5cf6;
+      }
+      .hud-toggle-wrap input:checked + .hud-toggle-track:before {
+        transform: translateX(16px);
+      }
+
+      /* Control Sliders */
+      .hud-slider-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .hud-slider-label {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: #cbd5e1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 125px;
+      }
+      .hud-slider-field {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .hud-range {
+        flex: 1;
+        -webkit-appearance: none;
+        height: 3.5px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.18);
+        outline: none;
+      }
+      .hud-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(255, 255, 255, 0.6), 0 2px 5px rgba(0,0,0,0.5);
+        transition: transform 0.1s, background 0.1s;
+      }
+      .hud-range::-webkit-slider-thumb:hover { transform: scale(1.25); background: #ffffff; }
+      .hud-range-val {
+        font-size: 13px;
+        font-weight: 700;
+        color: #ffffff;
+        min-width: 32px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* PRO / EXT Badges */
+      .hud-badge-pro {
+        background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(236, 72, 153, 0.3));
+        border: 1px solid rgba(168, 85, 247, 0.5);
+        color: #d8b4fe;
+        font-size: 9.5px;
+        font-weight: 800;
+        padding: 1.5px 6px;
+        border-radius: 5px;
+        letter-spacing: 0.5px;
+      }
+      .hud-badge-ext {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #94a3b8;
+        font-size: 9px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+
+      /* Dividers */
+      .hud-divider-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin: 6px 0 2px 0;
+      }
+      .hud-divider-label:after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      /* PROFILES TAB STYLES (Images 1 & 2) */
+      .hud-profiles-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .hud-profile-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .hud-profile-item:hover {
+        background: rgba(255, 255, 255, 0.07);
+        transform: translateX(2px);
+      }
+      .hud-profile-item.active {
+        background: rgba(255, 255, 255, 0.13);
+        border-color: rgba(255, 255, 255, 0.22);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      }
+      .hud-profile-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .hud-profile-icon {
+        font-size: 16px;
+        width: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #f1f5f9;
+      }
+      .hud-profile-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .hud-profile-name {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #ffffff;
+      }
+      .hud-profile-desc {
+        font-size: 11px;
+        color: #94a3b8;
+      }
+      .hud-profile-tags {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #94a3b8;
+        font-size: 12.5px;
+      }
+
+      /* ZOOM TAB STYLES (Image 3) */
+      .hud-zoom-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .hud-zoom-pill-btn {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 16px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s;
+      }
+      .hud-zoom-pill-btn:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      .hud-zoom-pill-btn.active {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+      .hud-aspect-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 10px;
+        margin-bottom: 2px;
+      }
+      .hud-aspect-title {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+      }
+      .hud-aspect-meta {
+        font-size: 11px;
+        color: #94a3b8;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .hud-aspect-grid {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .hud-aspect-btn {
+        flex: 1;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 7px 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: #94a3b8;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .hud-aspect-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+      }
+      .hud-aspect-btn.active {
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px dashed rgba(255, 255, 255, 0.45);
+        color: #ffffff;
+        font-weight: 700;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+      }
+
+      /* Capture Tab Action Cards */
+      .hud-card-action {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .hud-card-action:hover {
+        background: rgba(139, 92, 246, 0.14);
+        border-color: rgba(139, 92, 246, 0.4);
+        transform: translateY(-1px);
+      }
+      .hud-card-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .hud-card-ico {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+      }
+      .hud-card-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #f8fafc;
+      }
+      .hud-card-desc {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 2px;
+      }
+      .hud-card-btn {
+        background: var(--cc-accent-color, #8b5cf6);
+        color: white;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        pointer-events: none;
+      }
+
+      /* Presets Pills Grid */
+      .hud-grid-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .hud-pill-option {
+        flex: 1;
+        min-width: 75px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #cbd5e1;
+        padding: 8px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .hud-pill-option:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+      }
+      .hud-pill-option.active {
+        background: rgba(139, 92, 246, 0.25);
+        border-color: #8b5cf6;
+        color: #fff;
+      }
+
+      /* Fluidity / FPS Display */
+      .hud-fps-banner {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 14px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .hud-fps-big-val {
+        font-size: 28px;
+        font-weight: 800;
+        color: #34d399;
+        font-variant-numeric: tabular-nums;
+      }
+      .hud-grid-specs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .hud-spec-card {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      .hud-spec-lbl { font-size: 10.5px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+      .hud-spec-val { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-top: 3px; }
+
+      @keyframes hud-pulse-red {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(0.96); }
+      }
+      @keyframes hud-pop-in {
+        from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+    `;
+    this.shadow.appendChild(style);
+
+    const container = document.createElement('div');
+    container.className = 'hud-container';
+    container.innerHTML = `
+      <!-- COMPACT BUTTON (Image 1) & HOVER EXPANSION PILL (Image 2) -->
+      <div class="hud-pill" id="hud-pill">
+        <div class="hud-pill-bg"></div>
+        <div class="hud-pill-icon" title="Smart Video Suite">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2.5"></rect>
+            <path d="m2 8 20 0"></path>
+            <path d="m6 4 2 4"></path>
+            <path d="m11 4 2 4"></path>
+            <path d="m16 4 2 4"></path>
+            <path d="m7 14 1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="currentColor" stroke="none"></path>
+            <path d="m14 12 .5 1 1 .5-1 .5-.5 1-.5-1-1-.5 1-.5z" fill="currentColor" stroke="none"></path>
+          </svg>
+        </div>
+        <div class="hud-pill-divider"></div>
+        <div class="hud-pill-actions">
+          <button class="hud-pill-btn-shot" id="pill-btn-shot" title="Capture Screenshot" aria-label="Capture Screenshot">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+          </button>
+          <button class="hud-pill-btn-rec" id="pill-btn-rec" title="Record Video" aria-label="Record Video">
+            <span class="hud-rec-dot"></span>
+          </button>
+          <button class="hud-pill-btn-more" id="pill-btn-more" title="More Video Options" aria-label="More Video Options">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2 2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- FULL SEXY GLASSMORPHIC TOP BAR (Images 1, 2, 3, 4) -->
+      <div class="hud-top-bar" id="hud-top-bar">
+        <!-- Magic Wand Profiles Capsule (Images 1 & 2) -->
+        <button class="hud-bar-profiles-btn" id="hud-bar-profiles" data-tab="profiles" title="Visual Profiles">
+          <span>🪄</span>
+          <span class="hud-profile-wand-label" id="hud-profile-wand-label" style="display:none;">Lift</span>
+        </button>
+
+        <!-- Navigation Tabs (Switched on HOVER) -->
+        <button class="hud-tab-item" data-tab="capture">
+          <span class="hud-tab-title">📸 Capture</span>
+          <span class="hud-tab-sub" id="tab-sub-cap">Shot & Rec</span>
+          <div class="hud-tab-indicator"></div>
+        </button>
+
+        <button class="hud-tab-item" data-tab="zoom">
+          <span class="hud-tab-title">⛶ Zoom</span>
+          <span class="hud-tab-sub" id="tab-sub-zoom">Off</span>
+          <div class="hud-tab-indicator"></div>
+        </button>
+
+        <button class="hud-tab-item active" data-tab="picture">
+          <span class="hud-tab-title">◩ Picture</span>
+          <span class="hud-tab-sub" id="tab-sub-pic">Neutral</span>
+          <div class="hud-tab-indicator"></div>
+        </button>
+
+        <button class="hud-tab-item" data-tab="ambience">
+          <span class="hud-tab-title">🔆 Ambience</span>
+          <span class="hud-tab-sub" id="tab-sub-amb">Off</span>
+          <div class="hud-tab-indicator"></div>
+        </button>
+
+
+
+        <div class="hud-top-right-actions">
+          <button class="hud-tool-btn" id="btn-top-settings" title="Settings">⚙</button>
+          <button class="hud-tool-btn" id="hud-close-btn" title="Close Panel">✕</button>
+        </div>
+      </div>
+
+      <!-- FULL CONTROLLER HUD PANEL WRAPPER -->
+      <div class="hud-panel-wrap" id="hud-panel-wrap">
+        <!-- TAB 0: PROFILES (Images 1 & 2) -->
+        <div class="hud-body-pane" id="pane-profiles">
+          <div class="hud-row-header">
+            <div class="hud-header-left">
+              <span class="hud-pane-title">🎬 Profiles <span class="hud-info-icon" title="One-click visual mastering profiles">ⓘ</span></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="hud-badge-site" id="badge-site-profiles">📍 ON THIS SITE</button>
+              <button class="hud-btn-reset" id="btn-reset-profiles" title="Reset Profile">↺</button>
+            </div>
+          </div>
+
+          <div class="hud-profiles-list">
+            <div class="hud-profile-item" data-profile="lift">
+              <div class="hud-profile-left">
+                <div class="hud-profile-icon">🪄</div>
+                <div class="hud-profile-info">
+                  <div class="hud-profile-name">Lift</div>
+                  <div class="hud-profile-desc">A small step up, the picture still itself</div>
+                </div>
+              </div>
+              <div class="hud-profile-tags">
+                <span title="Lighting">☼</span>
+                <span title="Texture">◓</span>
+                <span title="Contrast">◑</span>
+              </div>
+            </div>
+
+            <div class="hud-profile-item" data-profile="movie">
+              <div class="hud-profile-left">
+                <div class="hud-profile-icon">🎞️</div>
+                <div class="hud-profile-info">
+                  <div class="hud-profile-name">Movie</div>
+                  <div class="hud-profile-desc">Range and colour, motion left alone</div>
+                </div>
+              </div>
+              <div class="hud-profile-tags">
+                <span title="Grain">◒</span>
+                <span title="Contrast">◑</span>
+                <span title="Vibrance">🎨</span>
+                <span title="Shadows">🌘</span>
+                <span title="Lighting">☼</span>
+                <span title="Aspect">⛶</span>
+              </div>
+            </div>
+
+            <div class="hud-profile-item" data-profile="game">
+              <div class="hud-profile-left">
+                <div class="hud-profile-icon">🎮</div>
+                <div class="hud-profile-info">
+                  <div class="hud-profile-name">Game</div>
+                  <div class="hud-profile-desc">Sharp and bright, the glow on the sound</div>
+                </div>
+              </div>
+              <div class="hud-profile-tags">
+                <span title="Sharpness">◒</span>
+                <span title="Contrast">◑</span>
+                <span title="Vibrance">🎨</span>
+                <span title="Shadows">🌘</span>
+                <span title="Lighting">☼</span>
+                <span title="Fluidity">⚡</span>
+                <span title="Audio Pulse">🔊</span>
+              </div>
+            </div>
+
+            <div class="hud-profile-item" data-profile="music">
+              <div class="hud-profile-left">
+                <div class="hud-profile-icon">🎵</div>
+                <div class="hud-profile-info">
+                  <div class="hud-profile-name">Music</div>
+                  <div class="hud-profile-desc">Colour up, the glow on the beat</div>
+                </div>
+              </div>
+              <div class="hud-profile-tags">
+                <span title="Contrast">◑</span>
+                <span title="Vibrance">🎨</span>
+                <span title="Shadows">🌘</span>
+                <span title="Lighting">☼</span>
+                <span title="Ambience">🔆</span>
+              </div>
+            </div>
+
+            <div class="hud-profile-item" data-profile="sport">
+              <div class="hud-profile-left">
+                <div class="hud-profile-icon">🏀</div>
+                <div class="hud-profile-info">
+                  <div class="hud-profile-name">Sport</div>
+                  <div class="hud-profile-desc">Smooth motion, crisp detail</div>
+                </div>
+              </div>
+              <div class="hud-profile-tags">
+                <span title="HDR">☼</span>
+                <span title="Contrast">◑</span>
+                <span title="Vibrance">🎨</span>
+                <span title="Shadows">🌘</span>
+                <span title="Lighting">☼</span>
+                <span title="Motion">⚡</span>
+              </div>
+            </div>
+
+            <div class="hud-profile-item active" data-profile="none">
+              <div class="hud-profile-left">
+                <div class="hud-profile-icon">⊘</div>
+                <div class="hud-profile-info">
+                  <div class="hud-profile-name">None</div>
+                  <div class="hud-profile-desc">Raw video untouched</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 1: CAPTURE (Screenshot, Record, PiP, Speed) -->
+        <div class="hud-body-pane" id="pane-capture">
+          <div class="hud-card-action" id="card-take-screenshot">
+            <div class="hud-card-left">
+              <div class="hud-card-ico">📸</div>
+              <div>
+                <div class="hud-card-title">Capture Video Frame</div>
+                <div class="hud-card-desc">Saves to gallery, auto-downloads & copies to clipboard</div>
+              </div>
+            </div>
+            <button class="hud-card-btn">Capture (PNG)</button>
+          </div>
+
+          <div class="hud-card-action" id="card-toggle-record">
+            <div class="hud-card-left">
+              <div class="hud-card-ico" id="rec-card-icon">🔴</div>
+              <div>
+                <div class="hud-card-title" id="rec-card-title">Record Video</div>
+                <div class="hud-card-desc" id="rec-card-desc">Record playing stream directly without limits</div>
+              </div>
+            </div>
+            <button class="hud-card-btn" id="rec-card-btn" style="background:#ef4444;">Record</button>
+          </div>
+
+          <div class="hud-divider-label">Playback & Video Utilities</div>
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">📺 Picture-in-Picture</div>
+            <button class="hud-pill-option" id="btn-toggle-pip" style="flex:none; padding:6px 14px;">Toggle PiP</button>
+          </div>
+
+          <div class="hud-slider-row" style="flex-direction:column; align-items:flex-start; gap:8px;">
+            <div class="hud-slider-label">⏩ Playback Speed</div>
+            <div class="hud-grid-pills" style="width:100%;">
+              <button class="hud-pill-option" data-speed="0.5">0.5x</button>
+              <button class="hud-pill-option" data-speed="0.75">0.75x</button>
+              <button class="hud-pill-option active" data-speed="1.0">1.0x</button>
+              <button class="hud-pill-option" data-speed="1.25">1.25x</button>
+              <button class="hud-pill-option" data-speed="1.5">1.5x</button>
+              <button class="hud-pill-option" data-speed="2.0">2.0x</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: ZOOM (Exact Image 3 match) -->
+        <div class="hud-body-pane" id="pane-zoom">
+          <div class="hud-row-header">
+            <div class="hud-header-left">
+              <span class="hud-pane-title">⛶ Zoom</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="hud-badge-action" id="btn-zoom-pan">⤢ PAN</button>
+              <button class="hud-badge-action" id="btn-zoom-reapply">🔄 RE-APPLY OPTIONS</button>
+              <button class="hud-btn-reset" id="btn-reset-zoom" title="Reset Zoom">↺</button>
+            </div>
+          </div>
+
+          <!-- Row 1: Zoom to Fill button pill + Slider + x1.00 -->
+          <div class="hud-zoom-row">
+            <button class="hud-zoom-pill-btn active" id="btn-action-zoom-fill">
+              ⛶ Zoom to Fill
+            </button>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-zoom-scale" min="100" max="250" value="100">
+              <span class="hud-range-val" id="val-zoom-scale">×1.00</span>
+            </div>
+          </div>
+
+          <!-- Row 2: Elastic Stretch button pill + Slider + 0% -->
+          <div class="hud-zoom-row">
+            <button class="hud-zoom-pill-btn" id="btn-action-elastic-stretch">
+              ⯌ Auto Stretch
+            </button>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-elastic-stretch" min="0" max="100" value="0">
+              <span class="hud-range-val" id="val-elastic-stretch">0%</span>
+            </div>
+          </div>
+
+          <!-- Row 3: Remove blackbars automatically [PRO] toggle -->
+          <div class="hud-zoom-row" style="justify-content:space-between; margin-top:2px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:13px; font-weight:600; color:#f1f5f9; display:flex; align-items:center; gap:6px;">
+                ⛶ Remove blackbars automatically
+                
+              </span>
+              <span class="hud-info-icon" title="Intelligently detects and crops letterbox/pillarbox borders">ⓘ</span>
+            </div>
+            <label class="hud-toggle-wrap">
+              <input type="checkbox" id="toggle-remove-blackbars">
+              <span class="hud-toggle-track"></span>
+            </label>
+          </div>
+
+          <!-- Pan Coordinates (revealed when Pan is active) -->
+          <div id="hud-pan-controls" style="display:none; flex-direction:column; gap:10px; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
+              <span style="font-size:12px; font-weight:700; color:#cbd5e1; letter-spacing:0.5px;">PAN POSITION</span>
+              <button class="hud-badge-action" id="btn-reset-pan" title="Reset Pan coordinates to center (0%, 0%)" style="padding:3px 9px; font-size:11px; cursor:pointer;">↺ RESET PAN</button>
+            </div>
+            <div class="hud-slider-row">
+              <div class="hud-slider-label">↔ Pan X</div>
+              <div class="hud-slider-field">
+                <input type="range" class="hud-range" id="slider-pan-x" min="-50" max="50" value="0">
+                <span class="hud-range-val" id="val-pan-x">0%</span>
+              </div>
+            </div>
+            <div class="hud-slider-row">
+              <div class="hud-slider-label">↕ Pan Y</div>
+              <div class="hud-slider-field">
+                <input type="range" class="hud-range" id="slider-pan-y" min="-50" max="50" value="0">
+                <span class="hud-range-val" id="val-pan-y">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aspect Ratios Section (Image 3) -->
+          <div class="hud-aspect-header">
+            <span class="hud-aspect-title">CROP TO ASPECT RATIO</span>
+            <span class="hud-aspect-meta" id="stat-aspect-meta">Video: 16:9 · 1920×1080</span>
+          </div>
+          <div class="hud-aspect-grid">
+            <button class="hud-aspect-btn" data-ratio="4:3">4:3</button>
+            <button class="hud-aspect-btn" data-ratio="16:10">16:10</button>
+            <button class="hud-aspect-btn active" data-ratio="16:9">16:9</button>
+            <button class="hud-aspect-btn" data-ratio="18:9">18:9</button>
+            <button class="hud-aspect-btn" data-ratio="21:9">21:9</button>
+            <button class="hud-aspect-btn" data-ratio="32:9">32:9</button>
+          </div>
+        </div>
+
+        <!-- TAB 3: PICTURE (Exact Image 4 match) -->
+        <div class="hud-body-pane active" id="pane-picture">
+          <div class="hud-row-header">
+            <div class="hud-header-left">
+              <span class="hud-pane-title">◩ Picture</span>
+              <label class="hud-toggle-wrap">
+                <input type="checkbox" id="toggle-picture">
+                <span class="hud-toggle-track"></span>
+              </label>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="hud-badge-site" id="badge-site-picture">📍 ON THIS SITE</button>
+              <button class="hud-btn-reset" id="btn-reset-picture" title="Reset Filters">↺</button>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">☼ Lighting</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-lighting" min="-100" max="100" value="0">
+              <span class="hud-range-val" id="val-lighting">0</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">◓ Shadows</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-shadows" min="-100" max="100" value="0">
+              <span class="hud-range-val" id="val-shadows">0</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">◑ Contrast</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-contrast" min="-100" max="100" value="0">
+              <span class="hud-range-val" id="val-contrast">0</span>
+            </div>
+          </div>
+
+          <div class="hud-divider-label">REMASTER </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">
+              ◒ Sharpness <span class="hud-info-icon" title="Enhances texture micro-contrast">ⓘ</span>
+            </div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-sharpness" min="0" max="100" value="0">
+              <span class="hud-range-val" id="val-sharpness">0</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">
+              🎨 Vibrance <span class="hud-info-icon" title="Intelligently enriches muted tones without clipping">ⓘ</span>
+            </div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-vibrance" min="0" max="100" value="0">
+              <span class="hud-range-val" id="val-vibrance">0</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">
+              ☼ HDR Boost <span class="hud-info-icon" title="Dynamic range highlight boost">ⓘ</span>
+              <span class="hud-badge-ext">EXT</span>
+            </div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-hdr" min="0" max="100" value="0">
+              <span class="hud-range-val" id="val-hdr">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: AMBIENCE -->
+        <div class="hud-body-pane" id="pane-ambience">
+          <div class="hud-row-header">
+            <div class="hud-header-left">
+              <span class="hud-pane-title">🔆 Ambience </span>
+              <label class="hud-toggle-wrap">
+                <input type="checkbox" id="toggle-ambience">
+                <span class="hud-toggle-track"></span>
+              </label>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="hud-badge-site" id="badge-site-ambience">📍 ON THIS SITE</button>
+              <button class="hud-btn-reset" id="btn-reset-ambience" title="Reset Ambience">↺</button>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">🪄 Spread</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-amb-spread" min="0" max="100" value="100">
+              <span class="hud-range-val" id="val-amb-spread">100</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">💧 Intensity</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-amb-intensity" min="0" max="100" value="100">
+              <span class="hud-range-val" id="val-amb-intensity">100</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">🫧 Blur</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-amb-blur" min="10" max="100" value="45">
+              <span class="hud-range-val" id="val-amb-blur">45</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">⏱ Sync Rate</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-amb-sync" min="20" max="100" value="90">
+              <span class="hud-range-val" id="val-amb-sync">90</span>
+            </div>
+          </div>
+
+          <div class="hud-slider-row">
+            <div class="hud-slider-label">🔊 Audio Pulse</div>
+            <div class="hud-slider-field">
+              <input type="range" class="hud-range" id="slider-amb-audio" min="0" max="100" value="0">
+              <span class="hud-range-val" id="val-amb-audio">0</span>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+    `;
+
+    this.shadow.appendChild(container);
+    (document.fullscreenElement || document.body || document.documentElement)?.appendChild(this.hostEl);
+
+    try {
+      this.bindEvents();
+      this.syncUIFromSettings();
+    } catch (e) {
+      console.warn('SmartVideoHUD init error:', e);
+    }
+  },
+
+  bindEvents() {
+    const s = this.shadow;
+    if (!s) return;
+    const container = s.querySelector('.hud-container');
+    const pill = s.getElementById('hud-pill');
+    if (!container || !pill) return;
+
+    // Keep visible while hovering over pill or panel
+    container.addEventListener('mouseenter', () => {
+      this.isPillHovered = true;
+      clearTimeout(this.panelCloseTimer);
+      clearTimeout(this.hideTimer);
+      clearTimeout(this.mouseInactivityTimer);
+      container.classList.add('visible', 'mouse-close', 'pill-hovered');
+      container.classList.remove('near-button', 'faded');
+    });
+
+    container.addEventListener('mouseleave', () => {
+      this.isPillHovered = false;
+      container.classList.remove('pill-hovered');
+      clearTimeout(this.panelCloseTimer);
+      this.panelCloseTimer = setTimeout(() => {
+        if (this.isOpen) {
+          this.closePanel();
+        }
+      }, 300);
+    });
+
+    // Pill direct actions
+    s.getElementById('pill-btn-shot')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      captureVideoFrame(this.activeVideo);
+    });
+
+    s.getElementById('pill-btn-rec')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleVideoRecording(this.activeVideo);
+    });
+
+    s.getElementById('pill-btn-more')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.togglePanel();
+    });
+
+    // Clicking anywhere on the pill opens the full panel
+    pill.addEventListener('click', (e) => {
+      if (e.target.closest('#pill-btn-shot') || e.target.closest('#pill-btn-rec') || e.target.closest('#pill-btn-more')) return;
+      this.togglePanel();
+    });
+
+    s.getElementById('hud-close-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closePanel();
+    });
+
+    s.getElementById('btn-top-settings')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (chrome.runtime && chrome.runtime.openOptionsPage) {
+        chrome.runtime.openOptionsPage();
+      } else {
+        window.open(chrome.runtime.getURL('settings.html'));
+      }
+    });
+
+    // =========================================================
+    // TAB HOVER SWITCHING & ZOOM CLICK TO AUTO-FILL
+    // =========================================================
+    s.querySelectorAll('.hud-tab-item').forEach(btn => {
+      btn.addEventListener('mouseenter', () => {
+        const tab = btn.dataset.tab;
+        this.openTab(tab);
+      });
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tab = btn.dataset.tab;
+        if (tab === 'zoom') {
+          // Clicking on zoom auto-zooms to available space or toggles off
+          this.autoZoomToAvailableSpace();
+        } else if (tab === 'ambience') {
+          // Clicking on ambience directly toggles ambient lighting in empty video screen
+          this.settings.ambienceEnabled = !this.settings.ambienceEnabled;
+          this.applyAmbience();
+          this.updateSubtexts();
+          this.syncUIFromSettings();
+          this.saveSettings();
+          showToast(this.settings.ambienceEnabled ? "Ambience lighting enabled 🔆" : "Ambience disabled", "info");
+        } else {
+          this.openTab(tab);
+        }
+      });
+    });
+
+    // Magic wand profiles capsule button (Images 1 & 2)
+    const wandBtn = s.getElementById('hud-bar-profiles');
+    if (wandBtn) {
+      wandBtn.addEventListener('mouseenter', () => {
+        this.openTab('profiles');
+      });
+      wandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Clicking when active profile is set toggles it back to none
+        if (this.settings.activeProfile && this.settings.activeProfile !== 'none') {
+          this.applyProfile('none');
+        } else {
+          this.openTab('profiles');
+        }
+      });
+    }
+
+    // Profiles List Selection (Images 1 & 2): clicking active profile again makes it none; auto-closes
+    s.querySelectorAll('.hud-profile-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const profKey = item.dataset.profile;
+        if (this.settings.activeProfile === profKey && profKey !== 'none') {
+          this.applyProfile('none');
+        } else {
+          this.applyProfile(profKey);
+        }
+        // Auto-close panel after profile selection so video is unobstructed
+        setTimeout(() => {
+          this.closePanel();
+        }, 220);
+      });
+    });
+
+    s.getElementById('btn-reset-profiles').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.applyProfile('none');
+    });
+
+    // Capture tab actions
+    s.getElementById('card-take-screenshot').addEventListener('click', () => {
+      captureVideoFrame(this.activeVideo);
+    });
+
+    s.getElementById('card-toggle-record').addEventListener('click', () => {
+      toggleVideoRecording(this.activeVideo);
+    });
+
+    s.getElementById('btn-toggle-pip').addEventListener('click', () => {
+      if (this.activeVideo) {
+        if (document.pictureInPictureElement) {
+          document.exitPictureInPicture().catch(() => {});
+        } else if (typeof this.activeVideo.requestPictureInPicture === 'function') {
+          this.activeVideo.requestPictureInPicture().catch(() => {});
+        }
+      }
+    });
+
+    s.querySelectorAll('[data-speed]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        s.querySelectorAll('[data-speed]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const speed = parseFloat(btn.dataset.speed);
+        if (this.activeVideo) this.activeVideo.playbackRate = speed;
+        showToast(`Playback speed: ${speed}x`, 'info');
+      });
+    });
+
+    // Zoom Tab Controls (Image 3)
+    s.getElementById('btn-action-zoom-fill').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.autoZoomToAvailableSpace();
+    });
+
+    // Auto zoom disables on touching the zoom line (enters manual mode)
+    const zoomScale = s.getElementById('slider-zoom-scale');
+    const onZoomLineTouch = () => {
+      if (this.settings.autoZoomToFill) {
+        this.settings.autoZoomToFill = false;
+        const fillBtn = s.getElementById('btn-action-zoom-fill');
+        if (fillBtn) fillBtn.classList.remove('active');
+        showToast("Auto-zoom disabled (Manual Mode)", "info");
+      }
+    };
+    zoomScale.addEventListener('pointerdown', onZoomLineTouch);
+    zoomScale.addEventListener('mousedown', onZoomLineTouch);
+    zoomScale.addEventListener('touchstart', onZoomLineTouch);
+
+    zoomScale.addEventListener('input', () => {
+      onZoomLineTouch();
+      this.settings.zoomScale = parseInt(zoomScale.value);
+      s.getElementById('val-zoom-scale').textContent = `×${(this.settings.zoomScale / 100).toFixed(2)}`;
+      this.settings.zoomEnabled = (this.settings.zoomScale > 100);
+      this.applyZoom();
+      this.updateSubtexts();
+    });
+
+    // Auto stretch button toggle
+    const stretchBtn = s.getElementById('btn-action-elastic-stretch');
+    if (stretchBtn) {
+      stretchBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.autoStretchToAvailableSpace();
+      });
+    }
+
+    const elasticStretch = s.getElementById('slider-elastic-stretch');
+    const onStretchLineTouch = () => {
+      if (this.settings.autoElasticStretch) {
+        this.settings.autoElasticStretch = false;
+        if (stretchBtn) stretchBtn.classList.remove('active');
+        showToast("Auto-stretch disabled (Manual Mode)", "info");
+      }
+    };
+    elasticStretch.addEventListener('pointerdown', onStretchLineTouch);
+    elasticStretch.addEventListener('mousedown', onStretchLineTouch);
+    elasticStretch.addEventListener('touchstart', onStretchLineTouch);
+
+    elasticStretch.addEventListener('input', () => {
+      onStretchLineTouch();
+      this.settings.elasticStretch = parseInt(elasticStretch.value);
+      s.getElementById('val-elastic-stretch').textContent = `${this.settings.elasticStretch}%`;
+      this.applyZoom();
+      this.updateSubtexts();
+    });
+
+    // Universal slider-dragging focus: when user adjusts ANY picture/zoom/ambience slider,
+    // the rest of the HUD disappears and collapses into a sleek floating capsule (Images 1 & 2)
+    s.querySelectorAll('.hud-range').forEach(sliderEl => {
+      const row = sliderEl.closest('.hud-slider-row');
+      if (!row) return;
+
+      let releaseTimer = null;
+      const startSliding = () => {
+        clearTimeout(releaseTimer);
+        container.classList.add('slider-dragging');
+        s.querySelectorAll('.hud-slider-row').forEach(r => r.classList.remove('is-active-sliding'));
+        row.classList.add('is-active-sliding');
+      };
+
+      const endSliding = () => {
+        clearTimeout(releaseTimer);
+        releaseTimer = setTimeout(() => {
+          container.classList.remove('slider-dragging');
+          row.classList.remove('is-active-sliding');
+        }, 280);
+      };
+
+      sliderEl.addEventListener('pointerdown', startSliding);
+      sliderEl.addEventListener('mousedown', startSliding);
+      sliderEl.addEventListener('touchstart', startSliding);
+      sliderEl.addEventListener('input', startSliding);
+
+      sliderEl.addEventListener('pointerup', endSliding);
+      sliderEl.addEventListener('mouseup', endSliding);
+      sliderEl.addEventListener('touchend', endSliding);
+      sliderEl.addEventListener('change', endSliding);
+    });
+
+    const toggleBlackbars = s.getElementById('toggle-remove-blackbars');
+    toggleBlackbars.addEventListener('change', () => {
+      this.settings.removeBlackbars = toggleBlackbars.checked;
+      if (toggleBlackbars.checked) {
+        this.settings.zoomScale = Math.max(115, this.settings.zoomScale);
+        s.getElementById('slider-zoom-scale').value = this.settings.zoomScale;
+        s.getElementById('val-zoom-scale').textContent = `×${(this.settings.zoomScale / 100).toFixed(2)}`;
+        showToast('Auto-cropping blackbars', 'info');
+      }
+      this.applyZoom();
+      this.saveSettings();
+    });
+
+    // Pan Toggle Button
+    const panBtn = s.getElementById('btn-zoom-pan');
+    const panControls = s.getElementById('hud-pan-controls');
+    panBtn.addEventListener('click', () => {
+      this.settings.panActive = !this.settings.panActive;
+      panBtn.classList.toggle('active', this.settings.panActive);
+      panControls.style.display = this.settings.panActive ? 'flex' : 'none';
+    });
+
+    const panX = s.getElementById('slider-pan-x');
+    panX.addEventListener('input', () => {
+      this.settings.panX = parseInt(panX.value);
+      s.getElementById('val-pan-x').textContent = `${this.settings.panX}%`;
+      this.applyZoom();
+      this.saveSettings();
+    });
+
+    const panY = s.getElementById('slider-pan-y');
+    panY.addEventListener('input', () => {
+      this.settings.panY = parseInt(panY.value);
+      s.getElementById('val-pan-y').textContent = `${this.settings.panY}%`;
+      this.applyZoom();
+      this.saveSettings();
+    });
+
+    const btnResetPan = s.getElementById('btn-reset-pan');
+    if (btnResetPan) {
+      btnResetPan.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.settings.panX = 0;
+        this.settings.panY = 0;
+        panX.value = 0;
+        panY.value = 0;
+        s.getElementById('val-pan-x').textContent = '0%';
+        s.getElementById('val-pan-y').textContent = '0%';
+        this.applyZoom();
+        this.saveSettings();
+        showToast('Pan reset to center (0%, 0%)', 'info');
+      });
+    }
+
+    // Aspect Ratio Buttons (Image 3)
+    s.querySelectorAll('.hud-aspect-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        s.querySelectorAll('.hud-aspect-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.settings.aspectRatio = btn.dataset.ratio;
+        this.settings.zoomEnabled = true;
+        this.applyZoom();
+        this.updateSubtexts();
+        this.saveSettings();
+        showToast(`Aspect ratio set to ${btn.dataset.ratio}`, 'info');
+      });
+    });
+
+    s.getElementById('btn-zoom-reapply').addEventListener('click', () => {
+      this.applyZoom();
+      showToast('Zoom settings re-applied', 'info');
+    });
+
+    s.getElementById('btn-reset-zoom').addEventListener('click', () => {
+      this.settings.zoomEnabled = false;
+      this.settings.zoomScale = 100;
+      this.settings.elasticStretch = 0;
+      this.settings.removeBlackbars = false;
+      this.settings.aspectRatio = '16:9';
+      this.settings.panX = 0;
+      this.settings.panY = 0;
+      this.syncUIFromSettings();
+      this.applyZoom();
+      this.updateSubtexts();
+      this.saveSettings();
+      showToast('Zoom reset to default', 'info');
+    });
+
+    // Picture Tab Controls (Image 4)
+    const togglePic = s.getElementById('toggle-picture');
+    togglePic.addEventListener('change', () => {
+      this.settings.pictureEnabled = togglePic.checked;
+      this.applyFilters();
+      this.updateSubtexts();
+      this.saveSettings();
+    });
+
+    const bindPicSlider = (id, prop, unit = '') => {
+      const slider = s.getElementById(`slider-${id}`);
+      slider.addEventListener('input', () => {
+        this.settings[prop] = parseInt(slider.value);
+        s.getElementById(`val-${id}`).textContent = `${this.settings[prop]}${unit}`;
+        this.settings.pictureEnabled = true;
+        togglePic.checked = true;
+        this.applyFilters();
+        this.updateSubtexts();
+        this.saveSettings();
+      });
+    };
+
+    bindPicSlider('lighting', 'lighting');
+    bindPicSlider('shadows', 'shadows');
+    bindPicSlider('contrast', 'contrast');
+    bindPicSlider('sharpness', 'sharpness');
+    bindPicSlider('vibrance', 'vibrance');
+    bindPicSlider('hdr', 'hdrBoost');
+
+    s.getElementById('btn-reset-picture').addEventListener('click', () => {
+      this.settings.pictureEnabled = false;
+      this.settings.lighting = 0;
+      this.settings.shadows = 0;
+      this.settings.contrast = 0;
+      this.settings.sharpness = 0;
+      this.settings.vibrance = 0;
+      this.settings.hdrBoost = 0;
+      this.syncUIFromSettings();
+      this.applyFilters();
+      this.updateSubtexts();
+      this.saveSettings();
+      showToast('Picture settings reset', 'info');
+    });
+
+    // Ambience Tab Controls
+    const toggleAmb = s.getElementById('toggle-ambience');
+    toggleAmb.addEventListener('change', () => {
+      this.settings.ambienceEnabled = toggleAmb.checked;
+      this.applyAmbience();
+      this.updateSubtexts();
+      this.saveSettings();
+    });
+
+    const bindAmbSlider = (id, prop) => {
+      const slider = s.getElementById(`slider-amb-${id}`);
+      slider.addEventListener('input', () => {
+        this.settings[prop] = parseInt(slider.value);
+        s.getElementById(`val-amb-${id}`).textContent = this.settings[prop];
+        this.settings.ambienceEnabled = true;
+        toggleAmb.checked = true;
+        this.applyAmbience();
+        this.saveSettings();
+      });
+    };
+
+    bindAmbSlider('spread', 'ambienceSpread');
+    bindAmbSlider('intensity', 'ambienceIntensity');
+    bindAmbSlider('blur', 'ambienceBlur');
+    bindAmbSlider('sync', 'ambienceSyncRate');
+    bindAmbSlider('audio', 'ambienceAudioPulse');
+
+    s.getElementById('btn-reset-ambience')?.addEventListener('click', () => {
+      this.settings.ambienceEnabled = false;
+      this.settings.ambienceSpread = 100;
+      this.settings.ambienceIntensity = 100;
+      this.settings.ambienceBlur = 45;
+      this.settings.ambienceSyncRate = 90;
+      this.settings.ambienceAudioPulse = 0;
+      this.syncUIFromSettings();
+      this.applyAmbience();
+      this.updateSubtexts();
+      this.saveSettings();
+      showToast('Ambience reset', 'info');
+    });
+
+    const pinStatsBtn = s.getElementById('btn-pin-stats');
+    if (pinStatsBtn) {
+      pinStatsBtn.addEventListener('click', () => {
+        this.settings.pinStats = !this.settings.pinStats;
+        showToast(this.settings.pinStats ? 'Stats pinned to video' : 'Stats unpinned', 'info');
+        this.saveSettings();
+      });
+    }
+  },
+
+  setupResizeObserver(video) {
+    if (!video) return;
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    const playerContainer = video.closest('.html5-video-player, .video-player, [data-a-target="video-player"], #player, #movie_player, .player-container') || video.parentElement || document.body;
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        handleVideoRelayout();
+      });
+      try {
+        this.resizeObserver.observe(video);
+        if (playerContainer && playerContainer !== video) {
+          this.resizeObserver.observe(playerContainer);
+        }
+      } catch (e) {}
+    }
+  },
+
+  recomputeAutoStretch() {
+    let v = this.activeVideo;
+    if (!v) {
+      const videos = Array.from(document.querySelectorAll('video'));
+      v = videos.find(vid => !vid.paused && vid.readyState > 1) || videos[0];
+      if (v) this.activeVideo = v;
+    }
+    if (!v || !this.settings.autoElasticStretch) return;
+
+    const playerContainer = v.closest('.html5-video-player, .video-player, [data-a-target="video-player"], #player, #movie_player, .player-container') || v.parentElement || document.body;
+    const cRect = playerContainer ? playerContainer.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+    const cW = Math.max(100, cRect.width || window.innerWidth);
+    const cH = Math.max(100, cRect.height || window.innerHeight);
+    const vW = Math.max(100, v.videoWidth || cW);
+    const vH = Math.max(100, v.videoHeight || cH);
+
+    const cAspect = cW / cH;
+    const vAspect = vW / vH;
+
+    let neededStretch = 0;
+    // When container is wider than video (pillarbox on sides, e.g. ultrawide / theater mode) -> upscale stretch to fill
+    if (cAspect > vAspect + 0.03) {
+      const extraRatio = (cAspect / vAspect) - 1;
+      neededStretch = Math.max(0, Math.min(100, Math.round((extraRatio / 0.38) * 100)));
     } else {
-      initVideoOverlay();
+      // Container matches video (standard 16:9) -> downscale stretch to 0%
+      neededStretch = 0;
+    }
+
+    this.settings.elasticStretch = neededStretch;
+    this.syncUIFromSettings();
+    this.applyZoom();
+    this.updateSubtexts();
+  },
+
+  autoStretchToAvailableSpace() {
+    let v = this.activeVideo;
+    if (!v) {
+      const videos = Array.from(document.querySelectorAll('video'));
+      v = videos.find(vid => !vid.paused && vid.readyState > 1) || videos[0];
+      if (v) this.activeVideo = v;
+    }
+    if (!v) return;
+
+    // Toggle OFF if already active or stretched
+    if (this.settings.autoElasticStretch || this.settings.elasticStretch > 0) {
+      this.settings.autoElasticStretch = false;
+      this.settings.elasticStretch = 0;
+      this.syncUIFromSettings();
+      this.applyZoom();
+      this.updateSubtexts();
+      showToast("Auto stretch disabled (0%)", "info");
+      return;
+    }
+
+    // Toggle ON: activate dynamic autoElasticStretch
+    this.settings.autoElasticStretch = true;
+    this.setupResizeObserver(v);
+    this.recomputeAutoStretch();
+    showToast(`Auto stretch enabled (${this.settings.elasticStretch}%)`, "success");
+  },
+
+  recomputeAutoZoom() {
+    let v = this.activeVideo;
+    if (!v) {
+      const videos = Array.from(document.querySelectorAll('video'));
+      v = videos.find(vid => !vid.paused && vid.readyState > 1) || videos[0];
+      if (v) this.activeVideo = v;
+    }
+    if (!v || !this.settings.autoZoomToFill) return;
+
+    const playerContainer = v.closest('.html5-video-player, .video-player, [data-a-target="video-player"], #player, #movie_player, .player-container') || v.parentElement || document.body;
+    const cRect = playerContainer ? playerContainer.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+    const cW = Math.max(100, cRect.width || window.innerWidth);
+    const cH = Math.max(100, cRect.height || window.innerHeight);
+    const vW = Math.max(100, v.videoWidth || cW);
+    const vH = Math.max(100, v.videoHeight || cH);
+
+    const cAspect = cW / cH;
+    const vAspect = vW / vH;
+
+    let neededScale = 1.0;
+    // Auto upscale or downscale based on exact container vs video aspect ratio
+    if (cAspect > vAspect + 0.03) {
+      // Container is wider than video (pillarbox black bars on left/right, e.g. fullscreen ultrawide) -> upscale to fill
+      neededScale = cAspect / vAspect;
+    } else if (vAspect > cAspect + 0.03) {
+      // Container is taller than video (letterbox black bars top/bottom) -> upscale to fill
+      neededScale = vAspect / cAspect;
+    } else {
+      // Container aspect matches video aspect ratio (no black bars, e.g. non-fullscreen standard 16:9 player) -> downscale to 1.00!
+      neededScale = 1.0;
+    }
+
+    const scalePercent = Math.max(100, Math.min(300, Math.round(neededScale * 100)));
+    this.settings.zoomScale = scalePercent;
+    this.settings.zoomEnabled = (scalePercent > 100);
+
+    this.syncUIFromSettings();
+    this.applyZoom();
+    this.updateSubtexts();
+  },
+
+  autoZoomToAvailableSpace() {
+    let v = this.activeVideo;
+    if (!v) {
+      const videos = Array.from(document.querySelectorAll('video'));
+      v = videos.find(vid => !vid.paused && vid.readyState > 1) || videos[0];
+      if (v) this.activeVideo = v;
+    }
+    if (!v) {
+      showToast("No active video found to zoom", "error");
+      return;
+    }
+
+    // Toggle OFF if already zoomed
+    if (this.settings.autoZoomToFill || (this.settings.zoomEnabled && this.settings.zoomScale > 100)) {
+      this.settings.autoZoomToFill = false;
+      this.settings.zoomEnabled = false;
+      this.settings.zoomScale = 100;
+      this.settings.elasticStretch = 0;
+      this.settings.aspectRatio = '16:9';
+      this.settings.panX = 0;
+      this.settings.panY = 0;
+      this.syncUIFromSettings();
+      this.applyZoom();
+      this.updateSubtexts();
+      showToast("Zoom reset to normal (×1.00)", "info");
+      return;
+    }
+
+    // Toggle ON: activate dynamic autoZoomToFill
+    this.settings.autoZoomToFill = true;
+    this.setupResizeObserver(v);
+    this.recomputeAutoZoom();
+
+    showToast(`Auto zoomed to available space (×${((this.settings.zoomScale || 100) / 100).toFixed(2)})`, "success");
+  },
+
+  applyProfile(profileKey) {
+    const prof = this.profiles[profileKey] || this.profiles.none;
+    this.settings.activeProfile = profileKey;
+    this.settings.pictureEnabled = (profileKey !== 'none');
+    this.settings.lighting = prof.lighting;
+    this.settings.shadows = prof.shadows;
+    this.settings.contrast = prof.contrast;
+    this.settings.sharpness = prof.sharpness;
+    this.settings.vibrance = prof.vibrance;
+    this.settings.hdrBoost = prof.hdrBoost;
+    if (prof.ambienceAudioPulse > 0) {
+      this.settings.ambienceEnabled = true;
+      this.settings.ambienceAudioPulse = prof.ambienceAudioPulse;
+    }
+    this.syncUIFromSettings();
+    this.applyFilters();
+    this.applyAmbience();
+    this.updateSubtexts();
+    this.saveSettings();
+    showToast(profileKey === 'none' ? 'Profile reset to default' : `Profile applied: ${prof.name}`, 'info');
+  },
+
+  syncUIFromSettings() {
+    const s = this.shadow;
+    if (!s) return;
+
+    // Profiles
+    s.querySelectorAll('.hud-profile-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.profile === (this.settings.activeProfile || 'none'));
+    });
+
+    // Zoom
+    const fillBtn = s.getElementById('btn-action-zoom-fill');
+    if (fillBtn) {
+      fillBtn.classList.toggle('active', !!(this.settings.autoZoomToFill || (this.settings.zoomEnabled && this.settings.zoomScale > 100)));
+    }
+    const stretchBtnSync = s.getElementById('btn-action-elastic-stretch');
+    if (stretchBtnSync) {
+      stretchBtnSync.classList.toggle('active', !!(this.settings.autoElasticStretch || this.settings.elasticStretch > 0));
+    }
+    const setVal = (id, val) => {
+      const el = s.getElementById(id);
+      if (el) el.value = val;
+    };
+    const setText = (id, txt) => {
+      const el = s.getElementById(id);
+      if (el) el.textContent = txt;
+    };
+    const setChecked = (id, bool) => {
+      const el = s.getElementById(id);
+      if (el) el.checked = bool;
+    };
+
+    setVal('slider-zoom-scale', this.settings.zoomScale || 100);
+    setText('val-zoom-scale', `×${((this.settings.zoomScale || 100) / 100).toFixed(2)}`);
+    setVal('slider-elastic-stretch', this.settings.elasticStretch || 0);
+    setText('val-elastic-stretch', `${this.settings.elasticStretch || 0}%`);
+    setChecked('toggle-remove-blackbars', !!this.settings.removeBlackbars);
+    setVal('slider-pan-x', this.settings.panX || 0);
+    setText('val-pan-x', `${this.settings.panX || 0}%`);
+    setVal('slider-pan-y', this.settings.panY || 0);
+    setText('val-pan-y', `${this.settings.panY || 0}%`);
+
+    s.querySelectorAll('.hud-aspect-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.ratio === (this.settings.aspectRatio || '16:9'));
+    });
+
+    // Picture
+    setChecked('toggle-picture', !!this.settings.pictureEnabled);
+    setVal('slider-lighting', this.settings.lighting);
+    setText('val-lighting', this.settings.lighting);
+    setVal('slider-shadows', this.settings.shadows);
+    setText('val-shadows', this.settings.shadows);
+    setVal('slider-contrast', this.settings.contrast);
+    setText('val-contrast', this.settings.contrast);
+    setVal('slider-sharpness', this.settings.sharpness);
+    setText('val-sharpness', this.settings.sharpness);
+    setVal('slider-vibrance', this.settings.vibrance);
+    setText('val-vibrance', this.settings.vibrance);
+    setVal('slider-hdr', this.settings.hdrBoost);
+    setText('val-hdr', this.settings.hdrBoost);
+
+    // Ambience
+    setChecked('toggle-ambience', !!this.settings.ambienceEnabled);
+    setVal('slider-amb-spread', this.settings.ambienceSpread);
+    setText('val-amb-spread', this.settings.ambienceSpread);
+    setVal('slider-amb-intensity', this.settings.ambienceIntensity);
+    setText('val-amb-intensity', this.settings.ambienceIntensity);
+    setVal('slider-amb-blur', this.settings.ambienceBlur);
+    setText('val-amb-blur', this.settings.ambienceBlur);
+    setVal('slider-amb-sync', this.settings.ambienceSyncRate);
+    setText('val-amb-sync', this.settings.ambienceSyncRate);
+    setVal('slider-amb-audio', this.settings.ambienceAudioPulse);
+    setText('val-amb-audio', this.settings.ambienceAudioPulse);
+
+    this.updateSubtexts();
+  },
+
+  updateSubtexts() {
+    const s = this.shadow;
+    if (!s) return;
+
+    // Profiles Wand Button (Images 1 & 2)
+    const wandLabel = s.getElementById('hud-profile-wand-label');
+    if (wandLabel) {
+      if (this.settings.activeProfile && this.settings.activeProfile !== 'none') {
+        const prof = this.profiles[this.settings.activeProfile];
+        wandLabel.textContent = prof ? prof.name : this.settings.activeProfile;
+        wandLabel.style.display = 'inline';
+      } else {
+        wandLabel.style.display = 'none';
+      }
+    }
+
+    // Zoom
+    const zoomActive = (this.settings.zoomScale > 100 || this.settings.elasticStretch > 0 || (this.settings.aspectRatio && this.settings.aspectRatio !== '16:9'));
+    const tabZoom = s.getElementById('tab-sub-zoom');
+    if (tabZoom) tabZoom.textContent = zoomActive ? 'On' : 'Off';
+
+    // Picture count: "On · 3" (Images 1, 3, 4)
+    let picCount = 0;
+    if (this.settings.lighting !== 0) picCount++;
+    if (this.settings.shadows !== 0) picCount++;
+    if (this.settings.contrast !== 0) picCount++;
+    if (this.settings.sharpness !== 0) picCount++;
+    if (this.settings.vibrance !== 0) picCount++;
+    if (this.settings.hdrBoost !== 0) picCount++;
+
+    const tabPic = s.getElementById('tab-sub-pic');
+    if (tabPic) {
+      if (this.settings.pictureEnabled) {
+        tabPic.textContent = picCount > 0 ? `On · ${picCount}` : 'On';
+      } else {
+        tabPic.textContent = 'Off';
+      }
+    }
+
+    // Ambience
+    const tabAmb = s.getElementById('tab-sub-amb');
+    if (tabAmb) tabAmb.textContent = this.settings.ambienceEnabled ? 'On' : 'Off';
+
+    // Fluidity
+    const tabFps = s.getElementById('tab-sub-fps');
+    if (tabFps) tabFps.textContent = `${this.fpsTracker.fps || 60} FPS`;
+  },
+
+  getVideoViewportRect(video) {
+    if (!video) return { top: 0, left: 0, width: 0, height: 0, right: 0, bottom: 0 };
+
+    // 1. Check known video player container elements (YouTube, Netflix, Twitch, Vimeo, etc.)
+    const playerContainer = video.closest(
+      '.html5-video-player, #movie_player, .video-player, [data-a-target="video-player"], #player, .player-container, .jwplayer, .video-js, .vjs-tech, .shaka-video-container'
+    );
+    if (playerContainer) {
+      const pRect = playerContainer.getBoundingClientRect();
+      if (pRect.width > 80 && pRect.height > 60) {
+        return pRect;
+      }
+    }
+
+    // 2. Check parent elements with overflow:hidden (which clip the zoomed video)
+    let parent = video.parentElement;
+    while (parent && parent !== document.body && parent !== document.documentElement) {
+      const style = window.getComputedStyle(parent);
+      if (style.overflow === 'hidden' || style.overflowX === 'hidden' || style.overflowY === 'hidden') {
+        const pRect = parent.getBoundingClientRect();
+        if (pRect.width > 80 && pRect.height > 60 && pRect.width <= window.innerWidth && pRect.height <= window.innerHeight) {
+          return pRect;
+        }
+      }
+      parent = parent.parentElement;
+    }
+
+    // 3. Fallback: if video has transform zoom applied, use parent or unzoomed dimensions
+    const vRect = video.getBoundingClientRect();
+    if (this.settings.zoomEnabled && (this.settings.zoomScale > 100 || this.settings.elasticStretch > 0 || this.settings.aspectRatio !== '16:9' || this.settings.panX !== 0 || this.settings.panY !== 0)) {
+      if (video.parentElement && video.parentElement !== document.body) {
+        const pRect = video.parentElement.getBoundingClientRect();
+        if (pRect.width > 80 && pRect.height > 60) {
+          return pRect;
+        }
+      }
+      const origW = video.offsetWidth || video.clientWidth;
+      const origH = video.offsetHeight || video.clientHeight;
+      if (origW > 0 && origH > 0 && (origW < vRect.width || origH < vRect.height)) {
+        const centerX = vRect.left + vRect.width / 2;
+        const centerY = vRect.top + vRect.height / 2;
+        return {
+          top: centerY - origH / 2,
+          bottom: centerY + origH / 2,
+          left: centerX - origW / 2,
+          right: centerX + origW / 2,
+          width: origW,
+          height: origH
+        };
+      }
+    }
+
+    return vRect;
+  },
+
+  show(video, mouseX, mouseY) {
+    if (!video) return;
+    this.init();
+    this.activeVideo = video;
+    clearTimeout(this.hideTimer);
+
+    // Ensure host element is attached to current fullscreenElement or body
+    const targetParent = document.fullscreenElement || document.body || document.documentElement;
+    if (targetParent && this.hostEl && this.hostEl.parentElement !== targetParent) {
+      try {
+        targetParent.appendChild(this.hostEl);
+      } catch (e) {}
+    }
+
+    const container = this.shadow?.querySelector('.hud-container');
+    const pill = this.shadow?.getElementById('hud-pill');
+    if (!container || !pill) return;
+
+    // Position container at TOP-CENTER of the visible video viewport/container
+    const rect = this.getVideoViewportRect(video);
+    const visibleTop = Math.max(0, rect.top);
+    const topPos = Math.max(8, visibleTop + 14);
+    const leftPos = Math.max(10, rect.left + rect.width / 2);
+    container.style.top = `${topPos}px`;
+    container.style.left = `${leftPos}px`;
+
+    if (mouseX !== undefined && mouseY !== undefined) {
+      this.updatePositionAndProximity(video, mouseX, mouseY);
+      return;
+    }
+
+    container.classList.add('visible');
+
+    // Apply active video adjustments automatically
+    this.applyZoom();
+    this.applyFilters();
+    this.applyAmbience();
+    this.startFpsTracking();
+    this.updateStatsDisplay();
+  },
+
+  updatePositionAndProximity(video, mouseX, mouseY) {
+    if (!video) return;
+    this.init();
+    this.activeVideo = video;
+    clearTimeout(this.hideTimer);
+
+    const targetParent = document.fullscreenElement || document.body || document.documentElement;
+    if (targetParent && this.hostEl && this.hostEl.parentElement !== targetParent) {
+      try {
+        targetParent.appendChild(this.hostEl);
+      } catch (e) {}
+    }
+
+    const container = this.shadow?.querySelector('.hud-container');
+    const pill = this.shadow?.getElementById('hud-pill');
+    if (!container || !pill) return;
+
+    // Position container at TOP-CENTER of the visible video viewport/container
+    const rect = this.getVideoViewportRect(video);
+    const visibleTop = Math.max(0, rect.top);
+    const topPos = Math.max(8, visibleTop + 14);
+    const leftPos = Math.max(10, rect.left + rect.width / 2);
+    container.style.top = `${topPos}px`;
+    container.style.left = `${leftPos}px`;
+
+    // If panel is open, keep it visible
+    if (this.isOpen) {
+      container.classList.add('visible', 'open', 'mouse-close');
+      return;
+    }
+
+    // Direct hover on HUD
+    if (this.isPillHovered) {
+      container.classList.add('visible', 'pill-hovered', 'mouse-close');
+      container.classList.remove('near-button', 'faded');
+      return;
+    }
+
+    // Proximity detection: calculate distance to the pill button itself
+    const pillRect = pill.getBoundingClientRect();
+    const dx = Math.max(pillRect.left - mouseX, 0, mouseX - pillRect.right);
+    const dy = Math.max(pillRect.top - mouseY, 0, mouseY - pillRect.bottom);
+    const dist = Math.hypot(dx, dy);
+
+    // On hover anywhere over the video: the HUD button appears clearly
+    // Moving towards or hovering the button: expands into action capsule (Screenshot, Record, More)
+    if (dist <= 80) {
+      container.classList.add('visible', 'mouse-close', 'pill-hovered');
+      container.classList.remove('faded', 'near-button');
+    } else if (dist <= 180) {
+      container.classList.add('visible', 'near-button');
+      container.classList.remove('faded', 'mouse-close', 'pill-hovered');
+    } else {
+      container.classList.add('visible');
+      container.classList.remove('near-button', 'mouse-close', 'pill-hovered', 'faded');
+    }
+
+    if (!this.resizeObserver) {
+      this.setupResizeObserver(video);
+    }
+
+    // Apply active video adjustments automatically
+    this.applyZoom();
+    this.applyFilters();
+    this.applyAmbience();
+    this.startFpsTracking();
+    this.updateStatsDisplay();
+  },
+
+  hide() {
+    if (this.isOpen) return; // Keep open if panel is expanded
+    const container = this.shadow?.querySelector('.hud-container');
+    if (container) {
+      container.classList.remove('visible', 'near-button', 'mouse-close', 'pill-hovered');
+    }
+  },
+
+  togglePanel() {
+    if (this.isOpen) {
+      this.closePanel();
+    } else {
+      this.openPanel();
+    }
+  },
+
+  openPanel(tab = 'picture') {
+    this.isOpen = true;
+    const container = this.shadow.querySelector('.hud-container');
+    container.classList.add('open', 'mouse-close');
+    this.openTab(tab);
+  },
+
+  closePanel() {
+    this.isOpen = false;
+    const container = this.shadow.querySelector('.hud-container');
+    container.classList.remove('open');
+  },
+
+  openTab(tabName) {
+    this.activeTab = tabName;
+    const s = this.shadow;
+    s.querySelectorAll('.hud-tab-item').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === tabName);
+    });
+    const wandBtn = s.getElementById('hud-bar-profiles');
+    if (wandBtn) {
+      wandBtn.classList.toggle('active', tabName === 'profiles');
+    }
+    s.querySelectorAll('.hud-body-pane').forEach(pane => {
+      pane.classList.toggle('active', pane.id === `pane-${tabName}`);
+    });
+  },
+
+  applyZoom() {
+    const video = this.activeVideo;
+    if (!video) return;
+
+    const scale = (this.settings.zoomScale || 100) / 100;
+    const elastic = (this.settings.elasticStretch || 0) / 100;
+    const panX = this.settings.panX || 0;
+    const panY = this.settings.panY || 0;
+
+    let aspectX = 1;
+    let aspectY = 1;
+    if (this.settings.aspectRatio === '4:3') aspectX = 1.33;
+    else if (this.settings.aspectRatio === '16:10') aspectY = 1.1;
+    else if (this.settings.aspectRatio === '18:9') aspectY = 1.12;
+    else if (this.settings.aspectRatio === '21:9') aspectY = 1.33;
+    else if (this.settings.aspectRatio === '32:9') aspectY = 1.8;
+
+    // Elastic Stretch: keeps center 1:1, non-linearly stretches edges to fill screen without cropping (Images 3, 4, 5)
+    let elasticScaleX = 1;
+    if (elastic > 0) {
+      this.updateElasticFilter(elastic);
+      elasticScaleX = 1 + elastic * 0.38;
+    }
+
+    if (!this.settings.zoomEnabled && elastic === 0 && scale === 1 && aspectX === 1 && aspectY === 1 && panX === 0 && panY === 0) {
+      video.style.removeProperty('object-fit');
+      video.style.removeProperty('transform');
+      video.style.removeProperty('transform-origin');
+    } else {
+      video.style.setProperty('transform', `scale(${scale * aspectX * elasticScaleX}, ${scale * aspectY}) translate(${panX}%, ${panY}%)`, 'important');
+      video.style.setProperty('transform-origin', 'center center', 'important');
+    }
+
+    // Apply filters (which attaches elastic displacement filter if elastic > 0)
+    this.applyFilters();
+
+    // Auto-rescale ambience whenever zoom is modified or scaled!
+    if (this.settings.ambienceEnabled) {
+      this.applyAmbience();
+    }
+  },
+
+  applyFilters() {
+    const video = this.activeVideo;
+    if (!video) return;
+
+    let filterStr = '';
+    if (this.settings.pictureEnabled) {
+      const brightness = 1 + (this.settings.lighting || 0) / 100;
+      const contrast = 1 + (this.settings.contrast || 0) / 100;
+      const saturate = 1 + (this.settings.vibrance || 0) / 100;
+      const hdr = (this.settings.hdrBoost || 0) / 100;
+      const sharpness = (this.settings.sharpness || 0) / 200;
+      filterStr = `brightness(${brightness * (1 + hdr * 0.15)}) contrast(${contrast * (1 + hdr * 0.25 + sharpness)}) saturate(${saturate * (1 + hdr * 0.2)})`;
+    }
+
+    if (this.settings.elasticStretch > 0) {
+      filterStr = (filterStr ? filterStr + ' ' : '') + 'url(#cc-elastic-filter)';
+    }
+
+    if (filterStr) {
+      video.style.setProperty('filter', filterStr.trim(), 'important');
+    } else {
+      video.style.removeProperty('filter');
+    }
+  },
+
+  applyAmbience() {
+    let video = this.activeVideo;
+    if (!video) {
+      const videos = Array.from(document.querySelectorAll('video'));
+      video = videos.find(v => !v.paused && v.readyState > 1) || videos[0];
+      if (video) this.activeVideo = video;
+    }
+    if (!video || !this.settings.ambienceEnabled) {
+      this.stopAmbience();
+      return;
+    }
+
+    const playerContainer = video.closest('.video-player, .video-player__container, .html5-video-player, [data-a-target="video-player"], #player, #movie_player, .player-container') || video.parentElement || document.body;
+    if (!playerContainer) return;
+
+    // Ensure player container has positioning context
+    const computedParent = window.getComputedStyle(playerContainer);
+    if (computedParent.position === 'static') {
+      playerContainer.style.setProperty('position', 'relative', 'important');
+    }
+
+    const pRect = playerContainer.getBoundingClientRect();
+    const pW = Math.max(100, Math.round(pRect.width) || window.innerWidth);
+    const pH = Math.max(100, Math.round(pRect.height) || window.innerHeight);
+    const vW = Math.max(100, video.videoWidth || 1920);
+    const vH = Math.max(100, video.videoHeight || 1080);
+    const vAspect = vW / vH;
+    const pAspect = pW / pH;
+
+    let actualW = pW;
+    let actualH = pH;
+    let holeLeft = 0;
+    let holeTop = 0;
+
+    if (pAspect > vAspect) {
+      // Pillarbox bars on left & right (ultrawide / theater mode)
+      actualW = Math.round(pH * vAspect);
+      actualH = pH;
+      holeLeft = Math.round((pW - actualW) / 2);
+      holeTop = 0;
+    } else if (pAspect < vAspect) {
+      // Letterbox bars on top & bottom
+      actualW = pW;
+      actualH = Math.round(pW / vAspect);
+      holeLeft = 0;
+      holeTop = Math.round((pH - actualH) / 2);
+    }
+
+    // Base unzoomed video box
+    const baseW = actualW;
+    const baseH = actualH;
+
+    // Account for Zoom AND Elastic Stretch scaling so Ambience cutout dynamically rescales with both!
+    const zoomScale = (this.settings.zoomEnabled ? (this.settings.zoomScale || 100) / 100 : 1);
+    const elasticScaleX = (this.settings.elasticStretch > 0 ? (1 + (this.settings.elasticStretch / 100) * 0.38) : 1);
+    const totalScaleX = zoomScale * elasticScaleX;
+    const totalScaleY = zoomScale;
+
+    const effW = Math.round(baseW * totalScaleX);
+    const effH = Math.round(baseH * totalScaleY);
+    holeLeft = Math.max(0, Math.round((pW - effW) / 2));
+    holeTop = Math.max(0, Math.round((pH - effH) / 2));
+    const holeW = Math.min(pW, effW);
+    const holeH = Math.min(pH, effH);
+
+    // 1. Size video element so empty screen area is not occluded by Chrome's native solid black bars
+    // Video base size remains baseW and baseH (zoom is handled purely by transform scale in applyZoom!)
+    video.style.setProperty('width', `${baseW}px`, 'important');
+    video.style.setProperty('height', `${baseH}px`, 'important');
+    video.style.setProperty('max-width', '100%', 'important');
+    video.style.setProperty('max-height', '100%', 'important');
+    video.style.setProperty('margin', '0 auto', 'important');
+    video.style.setProperty('position', 'relative', 'important');
+    video.style.setProperty('z-index', '2', 'important');
+    video.style.setProperty('display', 'block', 'important');
+
+    if (video.parentElement && video.parentElement !== playerContainer) {
+      video.parentElement.style.setProperty('background', 'transparent', 'important');
+    }
+
+    // 2. Create or reuse ambient canvas
+    if (!this.ambience.canvas) {
+      const c = document.createElement('canvas');
+      c.id = 'cc-video-ambience-glow';
+      c.width = 64;
+      c.height = 36;
+      this.ambience.canvas = c;
+      this.ambience.ctx = c.getContext('2d');
+    }
+
+    const c = this.ambience.canvas;
+    if (c.parentElement !== playerContainer) {
+      try {
+        playerContainer.insertBefore(c, playerContainer.firstChild);
+      } catch (e) {
+        playerContainer.appendChild(c);
+      }
+    }
+
+    const blur = this.settings.ambienceBlur || 45;
+    const opacity = (this.settings.ambienceIntensity || 100) / 100;
+    const spread = (this.settings.ambienceSpread || 100) / 100;
+
+    // Use clip-path cutout polygon when there are empty bars so the video stream in center is 100% crystal-clear
+    // and the ambient lighting fills the entire empty screen (left/right/top/bottom)
+    let clipRule = 'none';
+    if (holeLeft > 4 || holeTop > 4) {
+      clipRule = `polygon(evenodd, 0px 0px, ${pW}px 0px, ${pW}px ${pH}px, 0px ${pH}px, 0px 0px, ${holeLeft}px ${holeTop}px, ${holeLeft + holeW}px ${holeTop}px, ${holeLeft + holeW}px ${holeTop + holeH}px, ${holeLeft}px ${holeTop + holeH}px, ${holeLeft}px ${holeTop}px)`;
+    }
+
+    c.style.setProperty('position', 'absolute', 'important');
+    c.style.setProperty('top', '0', 'important');
+    c.style.setProperty('left', '0', 'important');
+    c.style.setProperty('width', `${pW}px`, 'important');
+    c.style.setProperty('height', `${pH}px`, 'important');
+    c.style.setProperty('pointer-events', 'none', 'important');
+    c.style.setProperty('z-index', '3', 'important');
+    c.style.setProperty('filter', `blur(${blur}px) saturate(260%) brightness(1.45)`, 'important');
+    c.style.setProperty('opacity', `${opacity}`, 'important');
+    c.style.setProperty('transition', 'opacity 0.25s ease, filter 0.2s ease', 'important');
+    if (clipRule !== 'none') {
+      c.style.setProperty('clip-path', clipRule, 'important');
+      c.style.setProperty('-webkit-clip-path', clipRule, 'important');
+    } else {
+      c.style.removeProperty('clip-path');
+      c.style.removeProperty('-webkit-clip-path');
+    }
+
+    const renderAmbienceFrame = () => {
+      if (!this.activeVideo || !this.settings.ambienceEnabled) return;
+      const cvs = this.ambience.canvas;
+      const ctx = this.ambience.ctx;
+      if (!cvs || !ctx) return;
+
+      const baseOpacity = (this.settings.ambienceIntensity || 100) / 100;
+      let pulse = 1;
+
+      // Dynamic Audio Pulse Lightning in empty screen (User Request: "doing that lightning in this empty video screen")
+      if (this.settings.ambienceAudioPulse > 0) {
+        const pulseAmp = (this.settings.ambienceAudioPulse / 100);
+        const time = Date.now();
+        const wave = Math.sin(time / 140) * 0.26 + Math.sin(time / 65) * 0.14;
+        const lightning = (Math.random() > 0.93) ? (Math.random() * 0.55 + 0.35) : 0;
+        pulse = 1 + (wave + lightning) * pulseAmp;
+      }
+
+      try {
+        if (this.activeVideo.readyState >= 1) {
+          ctx.drawImage(this.activeVideo, 0, 0, cvs.width, cvs.height);
+        }
+      } catch (err) {
+        // Fallback for CORS-restricted live streams: vibrant dynamic atmospheric lighting
+        const time = Date.now();
+        const hue = (time / 35) % 360;
+        const grad = ctx.createLinearGradient(0, 0, cvs.width, cvs.height);
+        grad.addColorStop(0, `hsla(${hue}, 95%, 62%, 0.95)`);
+        grad.addColorStop(0.5, `hsla(${(hue + 60) % 360}, 95%, 55%, 0.95)`);
+        grad.addColorStop(1, `hsla(${(hue + 120) % 360}, 90%, 50%, 0.95)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, cvs.width, cvs.height);
+      }
+
+      cvs.style.setProperty('opacity', `${Math.min(1, Math.max(0.12, baseOpacity * pulse))}`, 'important');
+    };
+
+    renderAmbienceFrame();
+
+    if (this.ambience.intervalId) {
+      clearInterval(this.ambience.intervalId);
+      this.ambience.intervalId = null;
+    }
+    const rate = Math.max(25, 200 - (this.settings.ambienceSyncRate || 90) * 1.6);
+    this.ambience.intervalId = setInterval(renderAmbienceFrame, rate);
+  },
+
+  stopAmbience() {
+    if (this.ambience.intervalId) {
+      clearInterval(this.ambience.intervalId);
+      this.ambience.intervalId = null;
+    }
+    if (this.ambience.canvas) {
+      this.ambience.canvas.remove();
+      this.ambience.canvas = null;
+    }
+    if (this.activeVideo) {
+      this.activeVideo.style.removeProperty('width');
+      this.activeVideo.style.removeProperty('height');
+      this.activeVideo.style.removeProperty('max-width');
+      this.activeVideo.style.removeProperty('max-height');
+      this.activeVideo.style.removeProperty('margin');
+      this.activeVideo.style.removeProperty('position');
+      this.activeVideo.style.removeProperty('z-index');
+      this.activeVideo.style.removeProperty('display');
+    }
+  },
+
+  startFpsTracking() {
+    if (this.fpsTracker.active) return;
+    this.fpsTracker.active = true;
+
+    const tick = (now) => {
+      this.fpsTracker.frameCount++;
+      const elapsed = now - this.fpsTracker.lastTime;
+      if (elapsed >= 1000) {
+        this.fpsTracker.fps = Math.round((this.fpsTracker.frameCount * 1000) / elapsed);
+        this.fpsTracker.frameCount = 0;
+        this.fpsTracker.lastTime = now;
+        
+        const fpsStr = `${this.fpsTracker.fps} FPS`;
+        const fpsEl = this.shadow?.getElementById('fps-big-val');
+        const tabFps = this.shadow?.getElementById('tab-sub-fps');
+        if (fpsEl) fpsEl.textContent = fpsStr;
+        if (tabFps) tabFps.textContent = fpsStr;
+      }
+      this.fpsTracker.rafId = requestAnimationFrame(tick);
+    };
+    this.fpsTracker.rafId = requestAnimationFrame(tick);
+  },
+
+  updateStatsDisplay() {
+    const v = this.activeVideo;
+    if (!v || !this.shadow) return;
+    const resEl = this.shadow.getElementById('stat-resolution');
+    const playEl = this.shadow.getElementById('stat-play-state');
+    const durEl = this.shadow.getElementById('stat-duration');
+    const aspectMeta = this.shadow.getElementById('stat-aspect-meta');
+
+    const w = v.videoWidth || v.clientWidth || 1920;
+    const h = v.videoHeight || v.clientHeight || 1080;
+    if (resEl) resEl.textContent = `${w} × ${h}`;
+    if (playEl) playEl.textContent = v.paused ? 'Paused' : 'Playing';
+    if (durEl) {
+      const cur = Math.floor(v.currentTime || 0);
+      const m = Math.floor(cur / 60);
+      const s = cur % 60;
+      durEl.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    if (aspectMeta) {
+      const ratio = (w / h).toFixed(2);
+      let ratioName = '16:9';
+      if (ratio > 2.2) ratioName = '21:9';
+      else if (ratio < 1.4) ratioName = '4:3';
+      else if (ratio < 1.65) ratioName = '16:10';
+      else if (ratio > 1.85 && ratio < 2.1) ratioName = '18:9';
+      aspectMeta.textContent = `Video: ${ratioName} · ${w}×${h}`;
+    }
+  },
+
+  updateRecordingState(isRecording, timerText = '') {
+    const s = this.shadow;
+    if (!s) return;
+    const btn = s.getElementById('pill-btn-rec');
+    const cardTitle = s.getElementById('rec-card-title');
+    const cardBtn = s.getElementById('rec-card-btn');
+    const capSub = s.getElementById('tab-sub-cap');
+
+    if (isRecording) {
+      if (btn) {
+        btn.innerHTML = `<span class="hud-rec-dot" style="background:#fff; border-radius:2px; width:8px; height:8px;"></span>`;
+        btn.title = `Stop Recording (${timerText})`;
+        btn.classList.add('hud-pill-rec-live');
+      }
+      if (cardTitle) cardTitle.textContent = `Recording (${timerText})`;
+      if (cardBtn) cardBtn.textContent = 'Stop Recording';
+      if (capSub) capSub.textContent = `🔴 ${timerText}`;
+    } else {
+      if (btn) {
+        btn.innerHTML = `<span class="hud-rec-dot"></span>`;
+        btn.title = 'Record Video';
+        btn.classList.remove('hud-pill-rec-live');
+      }
+      if (cardTitle) cardTitle.textContent = 'Record Video';
+      if (cardBtn) cardBtn.textContent = 'Record';
+      if (capSub) capSub.textContent = 'Shot & Rec';
     }
   }
-});
+};
 
-// Video Screenshot Overlay Logic
-let hoveredVideo = null;
-let captureBtn = null;
-let hideCaptureBtnTimeout = null;
+
+function handleVideoRelayout() {
+  const v = SmartVideoHUD.activeVideo;
+  if (!v) return;
+
+  // 1. Auto upscale and auto downscale zoom as player becomes smaller or larger
+  if (SmartVideoHUD.settings.autoZoomToFill) {
+    SmartVideoHUD.recomputeAutoZoom();
+  } else if (SmartVideoHUD.settings.zoomEnabled) {
+    SmartVideoHUD.applyZoom();
+  }
+
+  // 2. Auto upscale and downscale elastic stretch as player becomes smaller or larger
+  if (SmartVideoHUD.settings.autoElasticStretch) {
+    SmartVideoHUD.recomputeAutoStretch();
+  }
+
+  // 3. Auto upscale and downscale ambience as player and video resize or stretch
+  if (SmartVideoHUD.settings.ambienceEnabled) {
+    SmartVideoHUD.applyAmbience();
+  }
+
+  // 3. Update HUD position if pill or panel is visible
+  if (SmartVideoHUD.isOpen || SmartVideoHUD.isPillHovered) {
+    SmartVideoHUD.show(v);
+  }
+}
+
+function handleFullscreenChange() {
+  if (SmartVideoHUD.hostEl) {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) {
+      try {
+        fsEl.appendChild(SmartVideoHUD.hostEl);
+      } catch (e) {
+        document.body.appendChild(SmartVideoHUD.hostEl);
+      }
+    } else {
+      document.body.appendChild(SmartVideoHUD.hostEl);
+    }
+  }
+  // Seamlessly relayout and auto-rescale zoom & ambience when entering or exiting fullscreen
+  setTimeout(handleVideoRelayout, 50);
+  setTimeout(handleVideoRelayout, 150);
+  setTimeout(handleVideoRelayout, 300);
+  setTimeout(handleVideoRelayout, 600);
+}
 
 function initVideoOverlay() {
-  if (document.getElementById('cc-video-capture-btn')) return;
-
-  captureBtn = document.createElement('button');
-  captureBtn.id = 'cc-video-capture-btn';
-  captureBtn.innerHTML = '📷';
-  captureBtn.title = "Capture Video Frame";
-  captureBtn.style.cssText = `
-    position: fixed;
-    z-index: 2147483647;
-    background: transparent;
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    padding: 8px;
-    font-size: 24px;
-    cursor: pointer;
-    display: none;
-    transition: transform 0.2s, background 0.2s;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
-    line-height: 1;
-  `;
-
-  captureBtn.addEventListener('mouseenter', () => {
-    captureBtn.style.background = 'rgba(0, 0, 0, 0.4)';
-    captureBtn.style.transform = 'scale(1.1)';
-  });
-  captureBtn.addEventListener('mouseleave', () => {
-    captureBtn.style.background = 'transparent';
-    captureBtn.style.transform = 'scale(1)';
-  });
-
-  captureBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (hoveredVideo) {
-      captureVideoFrame(hoveredVideo);
-    }
-  });
-
-  document.body.appendChild(captureBtn);
-  document.addEventListener('mousemove', handleVideoMouseMove, { passive: true });
+  SmartVideoHUD.init();
+  window.addEventListener('mousemove', handleVideoMouseMove, { capture: true, passive: true });
+  document.addEventListener('mousemove', handleVideoMouseMove, { capture: true, passive: true });
+  window.addEventListener('resize', handleVideoRelayout, { passive: true });
+  window.addEventListener('scroll', handleVideoRelayout, { passive: true });
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+  window.addEventListener('yt-navigate-finish', handleVideoRelayout, { passive: true });
+  window.addEventListener('popstate', handleVideoRelayout, { passive: true });
 }
 
 function removeVideoOverlay() {
+  window.removeEventListener('mousemove', handleVideoMouseMove, true);
+  document.removeEventListener('mousemove', handleVideoMouseMove, true);
   document.removeEventListener('mousemove', handleVideoMouseMove);
-  if (captureBtn && captureBtn.parentNode) {
-    captureBtn.parentNode.removeChild(captureBtn);
-  }
-  captureBtn = null;
-  hoveredVideo = null;
-  clearTimeout(hideCaptureBtnTimeout);
+  window.removeEventListener('resize', handleVideoRelayout);
+  window.removeEventListener('scroll', handleVideoRelayout);
+  document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+  SmartVideoHUD.hide();
+  SmartVideoHUD.stopAmbience();
 }
 
 function handleVideoMouseMove(e) {
-  if (!captureBtn) return;
-  if (e.target === captureBtn) {
-    clearTimeout(hideCaptureBtnTimeout);
-    return;
+  // If moving inside HUD itself, keep it open and unfaded
+  if (SmartVideoHUD.hostEl) {
+    const path = e.composedPath ? e.composedPath() : [];
+    if (path.includes(SmartVideoHUD.hostEl)) {
+      clearTimeout(SmartVideoHUD.hideTimer);
+      clearTimeout(SmartVideoHUD.mouseInactivityTimer);
+      clearTimeout(SmartVideoHUD.panelCloseTimer);
+      const container = SmartVideoHUD.shadow?.querySelector('.hud-container');
+      if (container) {
+        container.classList.add('visible', 'mouse-close', 'pill-hovered');
+        container.classList.remove('faded', 'near-button');
+      }
+      return;
+    }
   }
 
+  // 1. Direct video element under cursor
   let videoEl = e.target.tagName === 'VIDEO' ? e.target : null;
-    
-    // For sites like YouTube that overlay transparent divs on top of videos
-    if (!videoEl) {
-       const els = document.elementsFromPoint(e.clientX, e.clientY);
-       videoEl = els.find(el => el.tagName === 'VIDEO');
-    }
 
-    if (videoEl) {
-      hoveredVideo = videoEl;
-      const rect = videoEl.getBoundingClientRect();
-      
-      // Only show if the video is reasonably sized
-      if (rect.width > 200 && rect.height > 150) {
-        captureBtn.style.display = 'block';
-        captureBtn.style.top = (rect.top + 16) + 'px';
-        captureBtn.style.left = (rect.left + 16) + 'px';
-        
-        clearTimeout(hideCaptureBtnTimeout);
+  // 2. Element under cursor contains or is part of a video player
+  if (!videoEl && e.target && e.target.querySelector) {
+    const v = e.target.querySelector('video');
+    if (v) {
+      const vRect = SmartVideoHUD.getVideoViewportRect(v);
+      if (e.clientX >= vRect.left && e.clientX <= vRect.right &&
+          e.clientY >= vRect.top && e.clientY <= vRect.bottom) {
+        videoEl = v;
       }
-    } else {
-      clearTimeout(hideCaptureBtnTimeout);
-      hideCaptureBtnTimeout = setTimeout(() => {
-        if (captureBtn) captureBtn.style.display = 'none';
-        hoveredVideo = null;
-      }, 150);
     }
+  }
+
+  // 3. ElementsFromPoint (accounting for transparent overlays like on YouTube, Twitch, etc.)
+  if (!videoEl) {
+    const els = document.elementsFromPoint(e.clientX, e.clientY);
+    for (const el of els) {
+      if (el.tagName === 'VIDEO') { videoEl = el; break; }
+      const player = el.closest?.('.video-player, .video-player__container, .html5-video-player, [data-a-target="video-player"], #player, #movie_player, .player-container');
+      if (player) {
+        const v = player.querySelector('video');
+        if (v) { videoEl = v; break; }
+      }
+    }
+  }
+
+  // 4. Fallback: check all video elements on the page if cursor is within their viewport
+  if (!videoEl) {
+    const allVideos = Array.from(document.querySelectorAll('video'));
+    for (const v of allVideos) {
+      const rect = SmartVideoHUD.getVideoViewportRect(v);
+      if (rect.width > 40 && rect.height > 40 &&
+          e.clientX >= rect.left && e.clientX <= rect.right &&
+          e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        videoEl = v;
+        break;
+      }
+    }
+  }
+
+  // 5. Also check if mouse is near active video's button even if element under cursor is an overlay
+  if (!videoEl && SmartVideoHUD.activeVideo && SmartVideoHUD.activeVideo.isConnected) {
+    const rect = SmartVideoHUD.getVideoViewportRect(SmartVideoHUD.activeVideo);
+    if (e.clientX >= rect.left - 60 && e.clientX <= rect.right + 60 &&
+        e.clientY >= rect.top - 60 && e.clientY <= rect.bottom + 60) {
+      videoEl = SmartVideoHUD.activeVideo;
+    }
+  }
+
+  if (videoEl) {
+    const rect = SmartVideoHUD.getVideoViewportRect(videoEl);
+    if (rect.width > 50 && rect.height > 40) {
+      clearTimeout(SmartVideoHUD.hideTimer);
+      clearTimeout(SmartVideoHUD.panelCloseTimer);
+      SmartVideoHUD.show(videoEl, e.clientX, e.clientY);
+
+      // Inactivity timeout: if mouse stops moving on video for 3.5s and panel is not open -> hide!
+      clearTimeout(SmartVideoHUD.mouseInactivityTimer);
+      SmartVideoHUD.mouseInactivityTimer = setTimeout(() => {
+        if (!SmartVideoHUD.isOpen && !SmartVideoHUD.isPillHovered) {
+          SmartVideoHUD.hide();
+        }
+      }, 3500);
+      return;
+    }
+  }
+
+  // Mouse left video area
+  clearTimeout(SmartVideoHUD.hideTimer);
+  SmartVideoHUD.hideTimer = setTimeout(() => {
+    if (!SmartVideoHUD.isPillHovered && !SmartVideoHUD.isOpen) {
+      SmartVideoHUD.hide();
+    }
+  }, 400);
 }
 document.addEventListener("copy", (e) => {
   const selection = window.getSelection().toString();
@@ -330,65 +3403,151 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+function cameraFlashEffect(targetEl) {
+  if (!targetEl) return;
+  const rect = targetEl.getBoundingClientRect();
+  const flash = document.createElement('div');
+  flash.style.cssText = `
+    position: fixed;
+    top: ${rect.top}px;
+    left: ${rect.left}px;
+    width: ${rect.width}px;
+    height: ${rect.height}px;
+    background: #ffffff;
+    opacity: 0.85;
+    z-index: 2147483647;
+    pointer-events: none;
+    transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  `;
+  document.body.appendChild(flash);
+  requestAnimationFrame(() => {
+    flash.style.opacity = '0';
+    setTimeout(() => flash.remove(), 300);
+  });
+}
+
+function downloadDataUrl(dataUrl, filename) {
+  try {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (e) {
+    console.warn("Auto-download error:", e);
+  }
+}
+
+async function copyDataUrlToClipboard(dataUrl) {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    if (navigator.clipboard && navigator.clipboard.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type || 'image/png']: blob })
+      ]);
+    }
+  } catch (e) {
+    console.debug("Clipboard copy optional:", e);
+  }
+}
+
+function handleScreenshotSuccess(dataUrl, filename, videoEl) {
+  // 1. Camera shutter flash animation
+  cameraFlashEffect(videoEl);
+
+  // 2. Always auto-download the screenshot file
+  downloadDataUrl(dataUrl, filename);
+
+  // 3. Save to CommandPaletteDB gallery
+  if (typeof CommandPaletteDB !== 'undefined' && CommandPaletteDB) {
+    CommandPaletteDB.addScreenshot(dataUrl, {
+      sourceUrl: window.location.href,
+      title: document.title || 'Video Screenshot',
+      type: 'image',
+      width: videoEl?.videoWidth || 0,
+      height: videoEl?.videoHeight || 0
+    }).catch(e => console.warn("Gallery save:", e));
+  }
+
+  // 4. Copy to clipboard
+  copyDataUrlToClipboard(dataUrl);
+
+  // 5. Toast notification
+  showToast("📸 Screenshot captured & saved to gallery!", "success");
+}
+
 function captureVideoFrame(targetVideo = null) {
-  let bestVideo = targetVideo;
+  let bestVideo = targetVideo || SmartVideoHUD.activeVideo;
 
   if (!bestVideo) {
     const videos = Array.from(document.querySelectorAll('video'));
     if (videos.length === 0) {
-      console.warn("No video elements found on the page.");
+      showToast("No video elements found on the page.", "error");
       return;
     }
-    
-    // Find the largest playing video, or just the largest video if none are playing
-    bestVideo = videos[0];
-  let maxArea = 0;
-  
-  for (const v of videos) {
-    const area = v.videoWidth * v.videoHeight;
-    // Prefer playing videos
-    if (!v.paused && area > 0) {
-      bestVideo = v;
-      break;
+    // Find largest playing video, or largest video
+    bestVideo = videos.find(v => !v.paused && v.readyState > 1) || videos[0];
+    let maxArea = 0;
+    for (const v of videos) {
+      const area = (v.videoWidth || v.clientWidth) * (v.videoHeight || v.clientHeight);
+      if (!v.paused && area > 0) {
+        bestVideo = v;
+        break;
+      }
+      if (area > maxArea) {
+        maxArea = area;
+        bestVideo = v;
+      }
     }
-    if (area > maxArea) {
-      maxArea = area;
-      bestVideo = v;
-    }
-  }
   }
 
-  if (bestVideo.videoWidth === 0 || bestVideo.videoHeight === 0) {
-    console.warn("Video does not have valid dimensions.");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `video_frame_${timestamp}.png`;
+
+  // 1. Try high-performance direct canvas export
+  let directDataUrl = null;
+  try {
+    const vw = bestVideo.videoWidth || bestVideo.clientWidth || 640;
+    const vh = bestVideo.videoHeight || bestVideo.clientHeight || 360;
+    const canvas = document.createElement('canvas');
+    canvas.width = vw;
+    canvas.height = vh;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bestVideo, 0, 0, canvas.width, canvas.height);
+    directDataUrl = canvas.toDataURL('image/png');
+  } catch (corsErr) {
+    console.debug("Direct canvas tainted (CORS / live stream), using precision tab crop fallback...", corsErr);
+  }
+
+  if (directDataUrl) {
+    handleScreenshotSuccess(directDataUrl, filename, bestVideo);
     return;
   }
 
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = bestVideo.videoWidth;
-    canvas.height = bestVideo.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(bestVideo, 0, 0, canvas.width, canvas.height);
-    
-    const dataUrl = canvas.toDataURL('image/png');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    
-    triggerClipboardImageDownload(dataUrl, `frame_${timestamp}.png`);
-    
-  } catch (err) {
-    console.warn("Failed to capture video frame (CORS restriction). Falling back to viewport screenshot...", err);
-    showToast("CORS blocked direct frame capture. Falling back to viewport screenshot...", "info");
-    
-    // Fallback to visible tab capture
-    chrome.runtime.sendMessage({ action: "capture_visible" }, (res) => {
-      if (res && res.dataUrl) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        triggerClipboardImageDownload(res.dataUrl, `fallback_frame_${timestamp}.png`);
-      } else {
-        alert("Could not capture video frame due to CORS restrictions, and fallback screenshot failed.");
-      }
-    });
-  }
+  // 2. CORS / WebRTC / Live Stream Fallback:
+  // Precision Tab Crop via background Service Worker (100% immune to CORS tainting!)
+  showToast("Capturing live video frame...", "info");
+  const rect = bestVideo.getBoundingClientRect();
+  chrome.runtime.sendMessage({
+    action: "capture_video_crop",
+    rect: {
+      x: rect.left,
+      y: rect.top,
+      width: rect.width,
+      height: rect.height,
+      dpr: window.devicePixelRatio || 1
+    },
+    sourceUrl: window.location.href,
+    title: document.title || 'Video Screenshot'
+  }, (res) => {
+    if (res && res.dataUrl) {
+      handleScreenshotSuccess(res.dataUrl, filename, bestVideo);
+    } else {
+      showToast("Failed to capture video frame: " + (chrome.runtime.lastError?.message || res?.error || "Error"), "error");
+    }
+  });
 }
 
 // Load stats for scoring
@@ -731,6 +3890,8 @@ function toggleCommandPalette() {
   const isNewTabPage = window.location.pathname.endsWith("newtab.html") || !!document.querySelector(".center-section");
   if (!ccRoot) {
     createCommandPalette();
+  } else if (!ccRoot.isConnected) {
+    (document.fullscreenElement || document.body || document.documentElement)?.appendChild(ccRoot);
   }
   if (isNewTabPage) {
     openCommandPalette();
@@ -754,7 +3915,7 @@ function openCommandPalette() {
   ccSubmenu.classList.remove("active");
   exitCommandMode(false); // reset command mode
   
-  if (document.activeElement && typeof document.activeElement.blur === "function") {
+  if (document.activeElement && document.activeElement !== ccSearchInput && typeof document.activeElement.blur === "function") {
     document.activeElement.blur();
   }
   
@@ -3378,7 +6539,68 @@ CommandRegistry.register({
 
 let recordingIndicator = null;
 
-// Auto-stop recording when tab closes — background already has chunks, just signal finalize
+// Helper to generate a crisp WebP thumbnail from recorded video blob
+function captureVideoBlobThumbnail(blob) {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(blob);
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+
+    let resolved = false;
+    const cleanup = () => {
+      if (resolved) return;
+      resolved = true;
+      URL.revokeObjectURL(url);
+      video.src = '';
+      video.remove();
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, 3500);
+
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(0.2, (video.duration || 1) / 2);
+    };
+
+    video.onseeked = () => {
+      clearTimeout(timer);
+      try {
+        const w = video.videoWidth || 640;
+        const h = video.videoHeight || 360;
+        const maxW = 360;
+        const scale = Math.min(1, maxW / w);
+        const tw = Math.round(w * scale);
+        const th = Math.round(h * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = tw;
+        canvas.height = th;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, tw, th);
+        const dataUrl = canvas.toDataURL('image/webp', 0.82);
+        cleanup();
+        resolve({ dataUrl, width: w, height: h });
+      } catch (e) {
+        cleanup();
+        resolve(null);
+      }
+    };
+
+    video.onerror = () => {
+      clearTimeout(timer);
+      cleanup();
+      resolve(null);
+    };
+
+    video.src = url;
+  });
+}
+
+// Auto-stop recording when tab closes — saves whatever was captured
 window.addEventListener('beforeunload', () => {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
@@ -3387,22 +6609,29 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-async function toggleVideoRecording() {
+let recordingTimerInterval = null;
+let recordingStartTimestamp = 0;
+
+async function toggleVideoRecording(preferredVideo = null) {
   if (!EXT_SETTINGS.enableScreenshots) { showToast("Video Recording is disabled in Settings", "error"); return; }
   
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
-    showToast("Stopping recording...", "info");
+    showToast("Stopping recording & finalizing...", "info");
     if (recordingIndicator) {
       recordingIndicator.remove();
       recordingIndicator = null;
     }
-    // onstop will send the final chunk + finalize
+    if (recordingTimerInterval) {
+      clearInterval(recordingTimerInterval);
+      recordingTimerInterval = null;
+    }
+    SmartVideoHUD.updateRecordingState(false);
     return;
   }
   try {
     const videos = Array.from(document.querySelectorAll('video'));
-    const targetVideo = videos.find(v => !v.paused && !v.ended && v.readyState > 2) || videos[0];
+    const targetVideo = preferredVideo || SmartVideoHUD.activeVideo || videos.find(v => !v.paused && !v.ended && v.readyState > 1) || videos[0];
 
     let stream;
     try {
@@ -3423,8 +6652,8 @@ async function toggleVideoRecording() {
         throw new Error("Stream has no video tracks (CORS protection likely).");
       }
     } catch (e) {
-      console.warn("Video capture failed or not found, falling back to display media:", e);
-      showToast("Select this tab in the popup to record.", "info");
+      console.warn("Video captureStream failed, falling back to display media:", e);
+      showToast("Select this tab/window in the popup to record.", "info");
       stream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: "browser" },
         audio: true,
@@ -3432,42 +6661,99 @@ async function toggleVideoRecording() {
       });
     }
 
-    // Tell background to start accumulating chunks
-    chrome.runtime.sendMessage({ action: "recording_start", sourceUrl: window.location.href }).catch(()=>{});
-
     mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
     recordedChunks = [];
     
-    // Stream each chunk to background as base64 so it survives tab close
     mediaRecorder.ondataavailable = e => {
-      if (e.data.size > 0) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          chrome.runtime.sendMessage({ action: "recording_chunk", chunk: reader.result }).catch(()=>{});
-        };
-        reader.readAsDataURL(e.data);
+      if (e.data && e.data.size > 0) {
+        recordedChunks.push(e.data);
       }
     };
     
-    mediaRecorder.onstop = () => {
+    mediaRecorder.onstop = async () => {
       // Stop all tracks to remove the screen share banner
       if (stream) stream.getTracks().forEach(t => t.stop());
       mediaRecorder = null;
-      // Tell background to finalize and save
-      chrome.runtime.sendMessage({ action: "recording_finalize", sourceUrl: window.location.href }, (res) => {
-        if (chrome.runtime.lastError) {
-          showToast("Failed to save recording", "error");
-        } else {
-          showToast("Video recording saved to gallery!", "success");
+      if (recordingIndicator) {
+        recordingIndicator.remove();
+        recordingIndicator = null;
+      }
+      if (recordingTimerInterval) {
+        clearInterval(recordingTimerInterval);
+        recordingTimerInterval = null;
+      }
+      SmartVideoHUD.updateRecordingState(false);
+
+      if (!recordedChunks || recordedChunks.length === 0) {
+        showToast("Recording was empty or stopped too quickly.", "error");
+        return;
+      }
+
+      showToast("Saving recording to gallery...", "info");
+
+      const finalBlob = new Blob(recordedChunks, { type: 'video/webm' });
+      recordedChunks = [];
+
+      // 1. Always auto-download the recorded video file
+      try {
+        const videoDownloadUrl = URL.createObjectURL(finalBlob);
+        const a = document.createElement('a');
+        a.href = videoDownloadUrl;
+        a.download = `video_recording_${Date.now()}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(videoDownloadUrl), 15000);
+      } catch (dlErr) {
+        console.warn("Auto-downloading video error:", dlErr);
+      }
+
+      // 2. Extract real video thumbnail from the recording directly in the tab
+      let thumbDataUrl = null;
+      let width = 0;
+      let height = 0;
+      try {
+        const thumbRes = await captureVideoBlobThumbnail(finalBlob);
+        if (thumbRes) {
+          thumbDataUrl = thumbRes.dataUrl;
+          width = thumbRes.width;
+          height = thumbRes.height;
         }
-      });
+      } catch (e) {
+        console.warn("Failed to generate video thumbnail:", e);
+      }
+
+      // 3. Save the raw Blob directly to IDB — no base64, no message bus, no 64 MB limit
+      try {
+        await CommandPaletteDB.saveVideoBlob(finalBlob, {
+          thumbDataUrl,
+          width,
+          height,
+          sourceUrl: window.location.href,
+          title: document.title || 'Video Recording',
+        });
+        showToast("Video recording saved to gallery! 🎬", "success");
+      } catch (err) {
+        console.error("[recording] Failed to save video to IDB:", err);
+        showToast("Failed to save recording: " + (err.message || "Unknown error"), "error");
+      }
     };
     
-    // Start with 2-second timeslice so chunks stream to background periodically
-    mediaRecorder.start(2000);
+    mediaRecorder.start(250); // Small 250ms timeslices so all frames are captured
+    recordingStartTimestamp = Date.now();
     chrome.runtime.sendMessage({ action: "set_recording_state", isRecording: true }).catch(()=>{});
-    showToast("Video recording started! Press Ctrl+Alt+B or click the red dot to stop.", "success");
+    showToast("🔴 Video recording started! Click stop when done.", "success");
     
+    // Start live HUD timer
+    SmartVideoHUD.updateRecordingState(true, '00:00');
+    recordingTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordingStartTimestamp) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      const str = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+      SmartVideoHUD.updateRecordingState(true, str);
+    }, 1000);
+
     // Create recording indicator UI — minimal red dot, click to stop
     recordingIndicator = document.createElement('div');
     recordingIndicator.style.cssText = `
@@ -3505,9 +6791,11 @@ async function toggleVideoRecording() {
     document.body.appendChild(recordingIndicator);
   } catch (err) {
     console.error(err);
-    showToast("Failed to start recording. " + (err.message || ""), "error");
+    SmartVideoHUD.updateRecordingState(false);
+    showToast("Failed to start recording: " + (err.message || ""), "error");
   }
-  }
+}
+
 // Tab Management Commands
 CommandRegistry.register({
   id: "close_current_tab",
@@ -4252,7 +7540,8 @@ function openAnnotationCanvas(imageBlob) {
 function triggerClipboardImageDownload(dataUrl, filename) {
   if (EXT_SETTINGS.enableScreenshots && typeof CommandPaletteDB !== 'undefined' && CommandPaletteDB) {
     const exactUrl = window.location.href;
-    CommandPaletteDB.addScreenshot(dataUrl, { sourceUrl: exactUrl }).then(() => {
+    const pageTitle = document.title || 'Screenshot';
+    CommandPaletteDB.addScreenshot(dataUrl, { sourceUrl: exactUrl, title: pageTitle }).then(() => {
       showToast("Screenshot saved to gallery!", "success");
     }).catch(err => {
       console.error(err);
@@ -4382,41 +7671,38 @@ function downloadBytes(bytes, filename) {
 // TOAST NOTIFICATIONS
 // -------------------------------------------------------------
 function showToast(message, type = "success") {
+  // Remove any existing toast immediately so they don't pile up
+  const existingToasts = document.querySelectorAll('.cc-toast-notification');
+  existingToasts.forEach(t => t.remove());
+
+  const isError = type === "error";
+  const isInfo  = type === "info";
+
+  const accentColor = isError ? "#f43f5e" : isInfo ? "#60a5fa" : "#10b981";
+
   const toast = document.createElement("div");
+  toast.className = "cc-toast-notification";
   toast.style.cssText = `
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: ${type === "success" ? "rgba(16, 185, 129, 0.2)" : "rgba(244, 63, 94, 0.2)"};
-    border: 1px solid ${type === "success" ? "rgba(16, 185, 129, 0.3)" : "rgba(244, 63, 94, 0.3)"};
-    border-left: 4px solid ${type === "success" ? "#10b981" : "#f43f5e"};
-    color: white;
-    padding: 12px 18px;
-    border-radius: 8px;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 13px;
+    background: rgba(12, 12, 16, 0.95);
+    border-left: 3px solid ${accentColor};
+    color: #e4e4e7;
+    padding: 10px 16px;
+    border-radius: 0 6px 6px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 12.5px;
     font-weight: 500;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     z-index: 2147483647;
-    opacity: 0;
-    transform: translateY(15px);
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 320px;
+    line-height: 1.45;
+    pointer-events: none;
   `;
   toast.textContent = message;
   document.body.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.style.opacity = "1";
-    toast.style.transform = "translateY(0)";
-  }, 50);
 
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    toast.style.transform = "translateY(15px)";
-    setTimeout(() => toast.remove(), 250);
-  }, 2800);
+  setTimeout(() => toast.remove(), 2600);
 }
 
 // -------------------------------------------------------------
@@ -4902,3 +8188,56 @@ function triggerAutofillForm() {
     }
   });
 }
+
+// =============================================================
+// BOOTSTRAP / INITIALIZATION AT END OF SCRIPT
+// =============================================================
+function initExtensionOnLoad() {
+  preloadStats();
+
+  // Check if we came from Google Search fallback
+  if (window.location && window.location.hash && window.location.hash.includes("focus-palette=true")) {
+    history.replaceState(null, null, window.location.pathname + window.location.search);
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const q = urlParams.get("q") || "";
+    
+    setTimeout(() => {
+      if (!ccRoot) {
+        createCommandPalette();
+      }
+      openCommandPalette();
+      if (q && ccSearchInput) {
+        ccSearchInput.value = q;
+        ccSearchInput.setSelectionRange(0, q.length);
+        handleSearchInputChange();
+      }
+    }, 150);
+  }
+
+  // Initialize the hover video overlay & player HUD
+  initVideoOverlay();
+}
+
+// Immediately bind video hover detection and initialize HUD
+try {
+  initVideoOverlay();
+} catch (e) {}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initExtensionOnLoad);
+} else {
+  initExtensionOnLoad();
+}
+
+window.addEventListener("load", () => {
+  try {
+    initVideoOverlay();
+  } catch (e) {}
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.app_settings) {
+    initVideoOverlay();
+  }
+});
