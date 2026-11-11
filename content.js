@@ -79,7 +79,7 @@ const SmartVideoHUD = {
   activeVideo: null,
   isPillHovered: false,
   isOpen: false,
-  activeTab: 'picture',
+  activeTab: 'capture',
   hideTimer: null,
   mouseInactivityTimer: null,
   fpsTracker: {
@@ -323,9 +323,44 @@ const SmartVideoHUD = {
 
     const style = document.createElement('style');
     style.textContent = `
-      * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-      
-      /* Main Container positioned at top-center of active video */
+      :host, .hud-container {
+        /* TARGET UI B DESIGN TOKENS */
+        --hud-surface: rgba(30, 24, 34, 0.86);
+        --hud-surface-opaque: rgba(28, 22, 32, 0.96);
+        --hud-surface-card: rgba(255, 255, 255, 0.05);
+        --hud-surface-card-hover: rgba(255, 255, 255, 0.08);
+        --hud-border: rgba(255, 255, 255, 0.10);
+        --hud-border-subtle: rgba(255, 255, 255, 0.06);
+        --hud-border-active: rgba(139, 92, 246, 0.50);
+        --hud-primary: #8B5CF6;
+        --hud-primary-hover: #7C3AED;
+        --hud-primary-tint: rgba(139, 92, 246, 0.22);
+        --hud-primary-tint-hover: rgba(139, 92, 246, 0.32);
+        --hud-record: #EF4444;
+        --hud-record-hover: #DC2626;
+        --hud-record-tint: rgba(239, 68, 68, 0.20);
+        --hud-text-primary: #FFFFFF;
+        --hud-text-secondary: #E2E8F0;
+        --hud-text-muted: rgba(255, 255, 255, 0.55);
+        --hud-text-label: #6B7A99;
+        --hud-radius-header: 24px;
+        --hud-radius-panel: 22px;
+        --hud-radius-card: 16px;
+        --hud-radius-btn: 12px;
+        --hud-radius-pill: 20px;
+        --hud-blur: blur(20px) saturate(180%);
+        --hud-shadow-panel: 0 24px 64px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        --hud-shadow-header: 0 16px 40px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        --hud-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: var(--hud-font);
+      }
+
       /* Main Container positioned at top-center of active video */
       .hud-container {
         position: fixed;
@@ -341,27 +376,20 @@ const SmartVideoHUD = {
         transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
       }
 
-      /* 1. When mouse is over video: clearly appear at top-center */
+      /* When mouse is over video: appear at top-center */
       .hud-container.visible {
-        opacity: 0.92;
+        opacity: 0.94;
         pointer-events: auto;
         transform: translateX(-50%) translateY(0);
       }
 
       .hud-container.visible.faded {
-        opacity: 0.75;
+        opacity: 0.80;
         pointer-events: auto;
         transform: translateX(-50%) translateY(0);
       }
 
-      /* 2. Mouse moving close to button: full opacity */
-      .hud-container.visible.near-button {
-        opacity: 1;
-        pointer-events: auto;
-        transform: translateX(-50%) translateY(0);
-      }
-
-      /* 3. Direct hover on button or open panel: fully active, smooth bold highlight */
+      .hud-container.visible.near-button,
       .hud-container.mouse-close,
       .hud-container.pill-hovered,
       .hud-container.open,
@@ -371,7 +399,7 @@ const SmartVideoHUD = {
         transform: translateX(-50%) translateY(0) !important;
       }
 
-      /* 3. Button / Pill Base State (Compact rounded square/capsule) */
+      /* Button / Pill Base State (Restyled with TARGET UI B tokens) */
       .hud-pill {
         position: relative;
         display: flex;
@@ -380,29 +408,27 @@ const SmartVideoHUD = {
         height: 38px;
         width: 38px;
         border-radius: 19px;
-        background: #090a10;
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-                    inset 0 -1px 0 rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(24px) saturate(180%);
-        -webkit-backdrop-filter: blur(24px) saturate(180%);
-        color: #f1f5f9;
+        background: rgba(30, 24, 34, 0.92);
+        border: 1px solid var(--hud-border);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        backdrop-filter: var(--hud-blur);
+        -webkit-backdrop-filter: var(--hud-blur);
+        color: var(--hud-text-secondary);
         cursor: pointer;
-        transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-                    height 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-                    padding 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-                    gap 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-                    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-                    border-radius 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-                    background 0.4s ease,
-                    border-color 0.4s ease,
-                    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                    height 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                    gap 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                    border-radius 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                    background 0.3s ease,
+                    border-color 0.3s ease,
+                    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
         overflow: visible;
         white-space: nowrap;
       }
 
-      /* Inner shine & glossy reflection wrapper matching the reference image */
       .hud-pill-bg {
         position: absolute;
         inset: 0;
@@ -412,7 +438,6 @@ const SmartVideoHUD = {
         z-index: 0;
       }
 
-      /* Glossy top bevel reflection */
       .hud-pill-bg::before {
         content: '';
         position: absolute;
@@ -420,17 +445,16 @@ const SmartVideoHUD = {
         left: 0;
         right: 0;
         height: 50%;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.01) 100%);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.01) 100%);
         border-radius: 22px 22px 0 0;
         opacity: 0;
-        transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
       }
       .hud-pill:hover .hud-pill-bg::before,
       .hud-container.pill-hovered .hud-pill-bg::before {
         opacity: 1;
       }
 
-      /* Sleek shining light shimmer sweep across the pill */
       .hud-pill-bg::after {
         content: '';
         position: absolute;
@@ -441,9 +465,9 @@ const SmartVideoHUD = {
         background: linear-gradient(
           75deg,
           transparent 20%,
-          rgba(255, 255, 255, 0.15) 45%,
-          rgba(255, 255, 255, 0.5) 50%,
-          rgba(255, 255, 255, 0.15) 55%,
+          rgba(255, 255, 255, 0.12) 45%,
+          rgba(255, 255, 255, 0.40) 50%,
+          rgba(255, 255, 255, 0.12) 55%,
           transparent 80%
         );
         transform: rotate(25deg);
@@ -461,9 +485,7 @@ const SmartVideoHUD = {
         100% { left: 160%; }
       }
 
-
-
-      /* 4. Mouse directly over button: EXPANDS, SCALES BIGGER, BOLD BLACK BG & METALLIC SHINE */
+      /* Hover Expansion into Action Capsule */
       .hud-pill:hover,
       .hud-container.pill-hovered .hud-pill,
       .hud-container.mouse-close .hud-pill {
@@ -472,14 +494,14 @@ const SmartVideoHUD = {
         border-radius: 22px;
         padding: 0 14px;
         gap: 10px;
-        transform: scale(1.08);
-        background: #06070a; /* Bold deep black background */
-        border: 1px solid rgba(255, 255, 255, 0.35);
+        transform: scale(1.06);
+        background: rgba(28, 22, 32, 0.98);
+        border: 1px solid rgba(139, 92, 246, 0.40);
         box-shadow: 
-          0 14px 40px rgba(0, 0, 0, 0.9),
-          0 0 20px rgba(255, 255, 255, 0.16),
-          inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.9),
-          inset 0 -1.5px 1px 0 rgba(255, 255, 255, 0.45);
+          0 14px 40px rgba(0, 0, 0, 0.85),
+          0 0 18px rgba(139, 92, 246, 0.25),
+          inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.45),
+          inset 0 -1px 1px 0 rgba(255, 255, 255, 0.15);
       }
 
       .hud-pill-icon {
@@ -489,16 +511,16 @@ const SmartVideoHUD = {
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-        color: #f1f5f9;
+        color: var(--hud-text-secondary);
         position: relative;
         z-index: 1;
       }
       .hud-pill-divider {
         width: 1px;
         height: 18px;
-        background: rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.20);
         opacity: 0;
-        transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
         flex-shrink: 0;
         position: relative;
         z-index: 1;
@@ -509,7 +531,6 @@ const SmartVideoHUD = {
         opacity: 1;
       }
 
-      /* Quick actions inside expanded pill: icon-only buttons */
       .hud-pill-actions {
         display: flex;
         align-items: center;
@@ -517,8 +538,8 @@ const SmartVideoHUD = {
         opacity: 0;
         max-width: 0;
         overflow: hidden;
-        transition: opacity 0.35s 0.08s cubic-bezier(0.22, 1, 0.36, 1),
-                    max-width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: opacity 0.3s 0.05s cubic-bezier(0.22, 1, 0.36, 1),
+                    max-width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
         position: relative;
         z-index: 1;
       }
@@ -541,12 +562,12 @@ const SmartVideoHUD = {
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
         flex-shrink: 0;
       }
       .hud-pill-btn-shot:hover {
-        background: rgba(139, 92, 246, 0.45);
-        border-color: #a78bfa;
+        background: var(--hud-primary-tint);
+        border-color: var(--hud-primary);
         color: #fff;
         transform: scale(1.15);
         box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
@@ -564,7 +585,7 @@ const SmartVideoHUD = {
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
         flex-shrink: 0;
       }
       .hud-rec-dot {
@@ -604,32 +625,31 @@ const SmartVideoHUD = {
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
         flex-shrink: 0;
       }
       .hud-pill-btn-more:hover {
-        background: rgba(255, 255, 255, 0.22);
-        border-color: rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(255, 255, 255, 0.30);
         color: #fff;
         transform: scale(1.15);
       }
 
-      /* When full panel is open, pill transforms into the top bar */
       .hud-container.open .hud-pill {
         display: none;
       }
 
-      /* 5. FULL SEXY GLASSMORPHIC TOP BAR (Images 1, 2, 3, 4) */
+      /* HEADER BAR (TARGET UI B) */
       .hud-top-bar {
         display: none;
         align-items: center;
-        padding: 6px 12px;
-        background: rgba(14, 16, 23, 0.84);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 26px;
-        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 1px 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(28px) saturate(200%);
-        -webkit-backdrop-filter: blur(28px) saturate(200%);
+        padding: 6px 10px;
+        background: var(--hud-surface);
+        border: 1px solid var(--hud-border);
+        border-radius: var(--hud-radius-header);
+        box-shadow: var(--hud-shadow-header);
+        backdrop-filter: var(--hud-blur);
+        -webkit-backdrop-filter: var(--hud-blur);
         gap: 6px;
         animation: hud-pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
@@ -637,28 +657,30 @@ const SmartVideoHUD = {
         display: flex;
       }
 
-      /* Profiles Wand Capsule Button */
+      /* Magic Wand Profiles Button on Left */
       .hud-bar-profiles-btn {
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 6px;
-        min-width: 36px;
-        height: 36px;
+        min-width: 38px;
+        height: 38px;
         padding: 0 10px;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        color: #f1f5f9;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--hud-border);
+        color: var(--hud-text-secondary);
         cursor: pointer;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         flex-shrink: 0;
+        font-size: 15px;
       }
       .hud-bar-profiles-btn:hover,
       .hud-bar-profiles-btn.active {
-        background: rgba(255, 255, 255, 0.16);
-        border-color: rgba(255, 255, 255, 0.28);
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        background: var(--hud-primary-tint);
+        border-color: var(--hud-primary);
+        box-shadow: 0 0 14px rgba(139, 92, 246, 0.40);
+        color: #ffffff;
       }
       .hud-profile-wand-label {
         font-size: 12px;
@@ -670,7 +692,7 @@ const SmartVideoHUD = {
       .hud-tab-item {
         background: transparent;
         border: 1px solid transparent;
-        color: #94a3b8;
+        color: var(--hud-text-muted);
         padding: 6px 14px;
         border-radius: 14px;
         cursor: pointer;
@@ -679,21 +701,21 @@ const SmartVideoHUD = {
         align-items: center;
         justify-content: center;
         transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-        min-width: 72px;
+        min-width: 76px;
         position: relative;
       }
       .hud-tab-item:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: #f1f5f9;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--hud-text-primary);
       }
       .hud-tab-item.active {
-        background: rgba(255, 255, 255, 0.14);
-        border-color: rgba(255, 255, 255, 0.2);
-        color: #ffffff;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: var(--hud-text-primary);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.20);
       }
       .hud-tab-title {
-        font-size: 12px;
+        font-size: 12.5px;
         font-weight: 700;
         display: flex;
         align-items: center;
@@ -701,22 +723,22 @@ const SmartVideoHUD = {
       }
       .hud-tab-sub {
         font-size: 10px;
-        color: #64748b;
+        color: var(--hud-text-muted);
         font-weight: 500;
         margin-top: 1px;
       }
       .hud-tab-item.active .hud-tab-sub {
-        color: #e2e8f0;
+        color: rgba(255, 255, 255, 0.85);
       }
-      /* Active tab indicator underline bar matching Image 4 */
+      /* Active tab short white underline bar */
       .hud-tab-indicator {
         display: none;
-        width: 18px;
+        width: 22px;
         height: 2.5px;
         background: #ffffff;
         border-radius: 2px;
         margin-top: 3px;
-        box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+        box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
       }
       .hud-tab-item.active .hud-tab-indicator {
         display: block;
@@ -731,7 +753,7 @@ const SmartVideoHUD = {
       .hud-tool-btn {
         background: transparent;
         border: none;
-        color: #94a3b8;
+        color: var(--hud-text-muted);
         width: 32px;
         height: 32px;
         border-radius: 50%;
@@ -744,21 +766,22 @@ const SmartVideoHUD = {
         flex-shrink: 0;
       }
       .hud-tool-btn:hover {
-        background: rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.10);
         color: #fff;
       }
 
-      /* While dragging any slider: collapse HUD into a single sleek floating capsule (Images 1 & 2) */
+      /* Sliding Collapse State */
       .hud-container.slider-dragging .hud-pill,
       .hud-container.slider-dragging .hud-top-bar,
       .hud-container.slider-dragging .hud-row-header,
       .hud-container.slider-dragging .hud-divider-label,
+      .hud-container.slider-dragging .hud-section-label,
+      .hud-container.slider-dragging .hud-pip-row,
+      .hud-container.slider-dragging .hud-speed-section,
       .hud-container.slider-dragging .hud-aspect-header,
       .hud-container.slider-dragging .hud-aspect-grid,
-      .hud-container.slider-dragging .hud-profile-list,
+      .hud-container.slider-dragging .hud-profiles-list,
       .hud-container.slider-dragging .hud-card-action,
-      .hud-container.slider-dragging .hud-fluid-grid,
-      .hud-container.slider-dragging .hud-fluid-stat-row,
       .hud-container.slider-dragging .hud-slider-row:not(.is-active-sliding) {
         display: none !important;
       }
@@ -766,10 +789,11 @@ const SmartVideoHUD = {
       .hud-container.slider-dragging .hud-panel-wrap {
         width: 440px !important;
         max-width: 90vw !important;
-        border-radius: 20px !important;
-        background: rgba(10, 12, 18, 0.94) !important;
-        border: 1px solid rgba(255, 255, 255, 0.22) !important;
-        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85),
+        border-radius: 18px !important;
+        background: var(--hud-surface-opaque) !important;
+        border: 1px solid rgba(139, 92, 246, 0.40) !important;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.85),
+                    0 0 18px rgba(139, 92, 246, 0.25),
                     inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
         padding: 0 !important;
         margin: 0 !important;
@@ -831,18 +855,18 @@ const SmartVideoHUD = {
         text-align: right !important;
       }
 
-      /* FULL SEXY GLASSMORPHIC DROPDOWN PANEL (Images 1, 2, 3, 4) */
+      /* MAIN BODY PANEL (TARGET UI B) */
       .hud-panel-wrap {
         display: none;
         flex-direction: column;
         width: 530px;
         max-width: 95vw;
-        border-radius: 22px;
-        background: rgba(14, 16, 23, 0.88);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.85), 0 0 1px 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-        backdrop-filter: blur(32px) saturate(200%);
-        -webkit-backdrop-filter: blur(32px) saturate(200%);
+        border-radius: var(--hud-radius-panel);
+        background: var(--hud-surface);
+        border: 1px solid var(--hud-border);
+        box-shadow: var(--hud-shadow-panel);
+        backdrop-filter: var(--hud-blur);
+        -webkit-backdrop-filter: var(--hud-blur);
         overflow: hidden;
         animation: hud-pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
       }
@@ -855,7 +879,7 @@ const SmartVideoHUD = {
         padding: 20px 24px;
         display: none;
         flex-direction: column;
-        gap: 16px;
+        gap: 14px;
         max-height: 490px;
         overflow-y: auto;
       }
@@ -866,7 +890,7 @@ const SmartVideoHUD = {
         width: 5px;
       }
       .hud-body-pane::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.16);
         border-radius: 4px;
       }
 
@@ -883,9 +907,9 @@ const SmartVideoHUD = {
         gap: 10px;
       }
       .hud-pane-title {
-        font-size: 15.5px;
+        font-size: 15px;
         font-weight: 700;
-        color: #f8fafc;
+        color: var(--hud-text-primary);
         display: flex;
         align-items: center;
         gap: 6px;
@@ -899,13 +923,13 @@ const SmartVideoHUD = {
       .hud-info-icon:hover { color: #cbd5e1; }
 
       .hud-badge-site {
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        color: #cbd5e1;
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
+        color: var(--hud-text-muted);
         font-size: 11px;
         font-weight: 700;
         padding: 4px 10px;
-        border-radius: 12px;
+        border-radius: var(--hud-radius-btn);
         display: flex;
         align-items: center;
         gap: 4px;
@@ -913,35 +937,40 @@ const SmartVideoHUD = {
         transition: all 0.15s;
       }
       .hud-badge-site:hover {
-        background: rgba(255, 255, 255, 0.14);
+        background: var(--hud-surface-card-hover);
         color: #ffffff;
       }
 
       .hud-badge-action {
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        color: #cbd5e1;
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
+        color: var(--hud-text-muted);
         font-size: 11px;
         font-weight: 700;
-        padding: 4px 10px;
-        border-radius: 12px;
+        padding: 5px 12px;
+        border-radius: var(--hud-radius-btn);
         cursor: pointer;
-        transition: all 0.15s;
+        transition: all 0.18s;
         display: flex;
         align-items: center;
         gap: 5px;
       }
-      .hud-badge-action:hover,
-      .hud-badge-action.active {
-        background: rgba(255, 255, 255, 0.16);
+      .hud-badge-action:hover {
+        background: var(--hud-surface-card-hover);
+        border-color: rgba(255, 255, 255, 0.25);
         color: #ffffff;
-        border-color: rgba(255, 255, 255, 0.28);
+      }
+      .hud-badge-action.active {
+        background: var(--hud-primary-tint);
+        border-color: var(--hud-primary);
+        color: #ffffff;
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
       }
 
       .hud-btn-reset {
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: #94a3b8;
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
+        color: var(--hud-text-muted);
         width: 28px;
         height: 28px;
         border-radius: 50%;
@@ -953,16 +982,16 @@ const SmartVideoHUD = {
         transition: all 0.15s;
       }
       .hud-btn-reset:hover {
-        background: rgba(255, 255, 255, 0.16);
+        background: var(--hud-surface-card-hover);
         color: #fff;
         transform: rotate(-45deg);
       }
 
-      /* iOS Toggle Switch */
+      /* iOS Toggle Switch in TARGET UI B Language */
       .hud-toggle-wrap {
         position: relative;
         display: inline-block;
-        width: 38px;
+        width: 40px;
         height: 22px;
         flex-shrink: 0;
       }
@@ -971,30 +1000,32 @@ const SmartVideoHUD = {
         position: absolute;
         cursor: pointer;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.16);
         border-radius: 22px;
         transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        border: 1px solid rgba(255, 255, 255, 0.10);
       }
       .hud-toggle-track:before {
         position: absolute;
         content: "";
         height: 16px;
         width: 16px;
-        left: 3px;
-        bottom: 3px;
+        left: 2px;
+        bottom: 2px;
         background-color: white;
         border-radius: 50%;
         transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
       }
       .hud-toggle-wrap input:checked + .hud-toggle-track {
-        background: #8b5cf6;
+        background: var(--hud-primary);
+        border-color: var(--hud-primary);
       }
       .hud-toggle-wrap input:checked + .hud-toggle-track:before {
-        transform: translateX(16px);
+        transform: translateX(18px);
       }
 
-      /* Control Sliders */
+      /* Control Sliders in TARGET UI B Language */
       .hud-slider-row {
         display: flex;
         align-items: center;
@@ -1004,7 +1035,7 @@ const SmartVideoHUD = {
       .hud-slider-label {
         font-size: 13.5px;
         font-weight: 500;
-        color: #cbd5e1;
+        color: var(--hud-text-secondary);
         display: flex;
         align-items: center;
         gap: 8px;
@@ -1019,43 +1050,36 @@ const SmartVideoHUD = {
       .hud-range {
         flex: 1;
         -webkit-appearance: none;
-        height: 3.5px;
+        height: 4px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.15);
         outline: none;
+        cursor: pointer;
       }
       .hud-range::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
-        width: 14px;
-        height: 14px;
+        width: 15px;
+        height: 15px;
         border-radius: 50%;
         background: #ffffff;
         cursor: pointer;
-        box-shadow: 0 0 8px rgba(255, 255, 255, 0.6), 0 2px 5px rgba(0,0,0,0.5);
-        transition: transform 0.1s, background 0.1s;
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.6), 0 2px 6px rgba(0,0,0,0.5);
+        transition: transform 0.12s, box-shadow 0.12s;
       }
-      .hud-range::-webkit-slider-thumb:hover { transform: scale(1.25); background: #ffffff; }
+      .hud-range::-webkit-slider-thumb:hover {
+        transform: scale(1.25);
+        box-shadow: 0 0 14px rgba(139, 92, 246, 0.9), 0 2px 8px rgba(0,0,0,0.6);
+      }
       .hud-range-val {
         font-size: 13px;
         font-weight: 700;
-        color: #ffffff;
+        color: var(--hud-text-primary);
         min-width: 32px;
         text-align: right;
         font-variant-numeric: tabular-nums;
       }
 
-      /* PRO / EXT Badges */
-      .hud-badge-pro {
-        background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(236, 72, 153, 0.3));
-        border: 1px solid rgba(168, 85, 247, 0.5);
-        color: #d8b4fe;
-        font-size: 9.5px;
-        font-weight: 800;
-        padding: 1.5px 6px;
-        border-radius: 5px;
-        letter-spacing: 0.5px;
-      }
       .hud-badge-ext {
         background: rgba(255, 255, 255, 0.08);
         border: 1px solid rgba(255, 255, 255, 0.16);
@@ -1066,18 +1090,20 @@ const SmartVideoHUD = {
         border-radius: 4px;
       }
 
-      /* Dividers */
+      /* Section Divider Labels (Hairline rule matching UI B) */
+      .hud-section-label,
       .hud-divider-label {
         display: flex;
         align-items: center;
-        gap: 8px;
-        color: #64748b;
+        gap: 12px;
+        color: var(--hud-text-label);
         font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.8px;
-        margin: 6px 0 2px 0;
+        margin: 8px 0 4px 0;
       }
+      .hud-section-label:after,
       .hud-divider-label:after {
         content: "";
         flex: 1;
@@ -1085,31 +1111,32 @@ const SmartVideoHUD = {
         background: rgba(255, 255, 255, 0.08);
       }
 
-      /* PROFILES TAB STYLES (Images 1 & 2) */
+      /* PROFILES TAB STYLES */
       .hud-profiles-list {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
       }
       .hud-profile-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 10px 14px;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid transparent;
+        border-radius: 14px;
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
         cursor: pointer;
         transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .hud-profile-item:hover {
-        background: rgba(255, 255, 255, 0.07);
+        background: var(--hud-surface-card-hover);
+        border-color: rgba(255, 255, 255, 0.18);
         transform: translateX(2px);
       }
       .hud-profile-item.active {
-        background: rgba(255, 255, 255, 0.13);
-        border-color: rgba(255, 255, 255, 0.22);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        background: var(--hud-primary-tint);
+        border-color: var(--hud-border-active);
+        box-shadow: 0 4px 16px rgba(139, 92, 246, 0.25);
       }
       .hud-profile-left {
         display: flex;
@@ -1136,7 +1163,7 @@ const SmartVideoHUD = {
       }
       .hud-profile-desc {
         font-size: 11px;
-        color: #94a3b8;
+        color: var(--hud-text-muted);
       }
       .hud-profile-tags {
         display: flex;
@@ -1146,7 +1173,7 @@ const SmartVideoHUD = {
         font-size: 12.5px;
       }
 
-      /* ZOOM TAB STYLES (Image 3) */
+      /* ZOOM TAB STYLES */
       .hud-zoom-row {
         display: flex;
         align-items: center;
@@ -1154,26 +1181,30 @@ const SmartVideoHUD = {
         gap: 14px;
       }
       .hud-zoom-pill-btn {
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 16px;
-        padding: 6px 14px;
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
+        border-radius: var(--hud-radius-btn);
+        padding: 7px 14px;
         font-size: 12px;
         font-weight: 600;
-        color: #f1f5f9;
+        color: var(--hud-text-secondary);
         display: flex;
         align-items: center;
         gap: 6px;
         cursor: pointer;
         white-space: nowrap;
-        transition: all 0.15s;
+        transition: all 0.18s;
       }
       .hud-zoom-pill-btn:hover {
-        background: rgba(255, 255, 255, 0.14);
+        background: var(--hud-surface-card-hover);
+        border-color: rgba(255, 255, 255, 0.22);
+        color: #ffffff;
       }
       .hud-zoom-pill-btn.active {
-        background: rgba(255, 255, 255, 0.18);
-        border-color: rgba(255, 255, 255, 0.3);
+        background: var(--hud-primary-tint);
+        border-color: var(--hud-primary);
+        color: #ffffff;
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
       }
       .hud-aspect-header {
         display: flex;
@@ -1183,7 +1214,7 @@ const SmartVideoHUD = {
         margin-bottom: 2px;
       }
       .hud-aspect-title {
-        color: #64748b;
+        color: var(--hud-text-label);
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.8px;
@@ -1203,34 +1234,35 @@ const SmartVideoHUD = {
       .hud-aspect-btn {
         flex: 1;
         text-align: center;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 7px 0;
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
+        border-radius: var(--hud-radius-btn);
+        padding: 8px 0;
         font-size: 12px;
         font-weight: 600;
-        color: #94a3b8;
+        color: var(--hud-text-muted);
         cursor: pointer;
-        transition: all 0.15s;
+        transition: all 0.18s;
       }
       .hud-aspect-btn:hover {
-        background: rgba(255, 255, 255, 0.12);
+        background: var(--hud-surface-card-hover);
+        border-color: rgba(255, 255, 255, 0.22);
         color: #ffffff;
       }
       .hud-aspect-btn.active {
-        background: rgba(255, 255, 255, 0.16);
-        border: 1px dashed rgba(255, 255, 255, 0.45);
+        background: var(--hud-primary-tint);
+        border: 1px solid var(--hud-primary);
         color: #ffffff;
         font-weight: 700;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
       }
 
-      /* Capture Tab Action Cards */
+      /* CAPTURE TAB ACTION CARDS (EXACT MATCH FOR TARGET UI B SCREENSHOT 3) */
       .hud-card-action {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 14px;
-        padding: 14px 16px;
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
+        border-radius: var(--hud-radius-card);
+        padding: 14px 18px;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -1238,106 +1270,139 @@ const SmartVideoHUD = {
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .hud-card-action:hover {
-        background: rgba(139, 92, 246, 0.14);
-        border-color: rgba(139, 92, 246, 0.4);
+        background: var(--hud-surface-card-hover);
+        border-color: rgba(255, 255, 255, 0.18);
         transform: translateY(-1px);
       }
       .hud-card-left {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
       }
       .hud-card-ico {
-        width: 38px;
-        height: 38px;
-        border-radius: 12px;
+        width: 42px;
+        height: 42px;
+        border-radius: var(--hud-radius-btn);
         background: rgba(255, 255, 255, 0.08);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
+        font-size: 20px;
+        color: #f1f5f9;
+        flex-shrink: 0;
       }
       .hud-card-title {
-        font-size: 13.5px;
-        font-weight: 600;
-        color: #f8fafc;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--hud-text-primary);
       }
       .hud-card-desc {
-        font-size: 11px;
-        color: #94a3b8;
+        font-size: 11.5px;
+        color: var(--hud-text-muted);
         margin-top: 2px;
+        line-height: 1.4;
       }
       .hud-card-btn {
-        background: var(--cc-accent-color, #8b5cf6);
-        color: white;
+        background: var(--hud-primary);
+        color: #ffffff;
         border: none;
-        padding: 6px 14px;
-        border-radius: 8px;
-        font-size: 12px;
+        padding: 8px 18px;
+        border-radius: var(--hud-radius-btn);
+        font-size: 12.5px;
         font-weight: 600;
         cursor: pointer;
-        pointer-events: none;
+        transition: all 0.18s ease;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        white-space: nowrap;
+      }
+      .hud-card-btn:hover {
+        background: var(--hud-primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(139, 92, 246, 0.5);
+      }
+      .hud-card-btn-rec {
+        background: var(--hud-record);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+      }
+      .hud-card-btn-rec:hover {
+        background: var(--hud-record-hover);
+        box-shadow: 0 6px 18px rgba(239, 68, 68, 0.5);
       }
 
-      /* Presets Pills Grid */
-      .hud-grid-pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-      .hud-pill-option {
-        flex: 1;
-        min-width: 75px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: #cbd5e1;
-        padding: 8px 10px;
-        border-radius: 10px;
-        font-size: 12px;
-        font-weight: 600;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.15s;
-      }
-      .hud-pill-option:hover {
-        background: rgba(255, 255, 255, 0.12);
-        color: white;
-      }
-      .hud-pill-option.active {
-        background: rgba(139, 92, 246, 0.25);
-        border-color: #8b5cf6;
-        color: #fff;
-      }
-
-      /* Fluidity / FPS Display */
-      .hud-fps-banner {
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        border-radius: 14px;
-        padding: 16px;
+      /* Picture in Picture row */
+      .hud-pip-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        padding: 4px 2px;
       }
-      .hud-fps-big-val {
-        font-size: 28px;
-        font-weight: 800;
-        color: #34d399;
-        font-variant-numeric: tabular-nums;
+      .hud-pip-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--hud-text-secondary);
       }
-      .hud-grid-specs {
+      .hud-btn-ghost {
+        background: var(--hud-surface-card);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: var(--hud-radius-btn);
+        padding: 8px 18px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--hud-text-secondary);
+        cursor: pointer;
+        transition: all 0.18s ease;
+      }
+      .hud-btn-ghost:hover {
+        background: var(--hud-surface-card-hover);
+        border-color: rgba(255, 255, 255, 0.25);
+        color: #ffffff;
+      }
+
+      /* Playback Speed section with 5 equal-width buttons + full-width 2.0x on row 2 */
+      .hud-speed-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 4px 2px;
+      }
+      .hud-speed-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--hud-text-secondary);
+      }
+      .hud-speed-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        width: 100%;
       }
-      .hud-spec-card {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px;
-        padding: 10px 12px;
+      .hud-speed-btn {
+        background: var(--hud-surface-card);
+        border: 1px solid var(--hud-border);
+        border-radius: var(--hud-radius-btn);
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 12.5px;
+        font-weight: 600;
+        padding: 8px 0;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
       }
-      .hud-spec-lbl { font-size: 10.5px; color: #64748b; font-weight: 600; text-transform: uppercase; }
-      .hud-spec-val { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-top: 3px; }
+      .hud-speed-btn:hover {
+        background: var(--hud-surface-card-hover);
+        border-color: rgba(255, 255, 255, 0.22);
+        color: #ffffff;
+      }
+      .hud-speed-btn.active {
+        background: var(--hud-primary-tint);
+        border: 1px solid var(--hud-primary);
+        color: #ffffff;
+        box-shadow: 0 0 12px rgba(139, 92, 246, 0.35);
+      }
+      .hud-speed-btn-full {
+        width: 100%;
+        margin-top: 0;
+      }
 
       @keyframes hud-pulse-red {
         0%, 100% { opacity: 1; transform: scale(1); }
@@ -1353,7 +1418,7 @@ const SmartVideoHUD = {
     const container = document.createElement('div');
     container.className = 'hud-container';
     container.innerHTML = `
-      <!-- COMPACT BUTTON (Image 1) & HOVER EXPANSION PILL (Image 2) -->
+      <!-- COLLAPSED PILL (RESTYLED IN TARGET UI B TOKENS) -->
       <div class="hud-pill" id="hud-pill">
         <div class="hud-pill-bg"></div>
         <div class="hud-pill-icon" title="Smart Video Suite">
@@ -1387,16 +1452,16 @@ const SmartVideoHUD = {
         </div>
       </div>
 
-      <!-- FULL SEXY GLASSMORPHIC TOP BAR (Images 1, 2, 3, 4) -->
+      <!-- FULL GLASSMORPHIC TOP BAR (TARGET UI B) -->
       <div class="hud-top-bar" id="hud-top-bar">
-        <!-- Magic Wand Profiles Capsule (Images 1 & 2) -->
+        <!-- Magic Wand Profiles Capsule on Left -->
         <button class="hud-bar-profiles-btn" id="hud-bar-profiles" data-tab="profiles" title="Visual Profiles">
           <span>🪄</span>
           <span class="hud-profile-wand-label" id="hud-profile-wand-label" style="display:none;">Lift</span>
         </button>
 
-        <!-- Navigation Tabs (Switched on HOVER) -->
-        <button class="hud-tab-item" data-tab="capture">
+        <!-- Navigation Tabs: Capture (Active by default in UI B), Zoom, Picture, Ambience -->
+        <button class="hud-tab-item active" data-tab="capture">
           <span class="hud-tab-title">📸 Capture</span>
           <span class="hud-tab-sub" id="tab-sub-cap">Shot & Rec</span>
           <div class="hud-tab-indicator"></div>
@@ -1408,7 +1473,7 @@ const SmartVideoHUD = {
           <div class="hud-tab-indicator"></div>
         </button>
 
-        <button class="hud-tab-item active" data-tab="picture">
+        <button class="hud-tab-item" data-tab="picture">
           <span class="hud-tab-title">◩ Picture</span>
           <span class="hud-tab-sub" id="tab-sub-pic">Neutral</span>
           <div class="hud-tab-indicator"></div>
@@ -1420,8 +1485,6 @@ const SmartVideoHUD = {
           <div class="hud-tab-indicator"></div>
         </button>
 
-
-
         <div class="hud-top-right-actions">
           <button class="hud-tool-btn" id="btn-top-settings" title="Settings">⚙</button>
           <button class="hud-tool-btn" id="hud-close-btn" title="Close Panel">✕</button>
@@ -1430,11 +1493,11 @@ const SmartVideoHUD = {
 
       <!-- FULL CONTROLLER HUD PANEL WRAPPER -->
       <div class="hud-panel-wrap" id="hud-panel-wrap">
-        <!-- TAB 0: PROFILES (Images 1 & 2) -->
+        <!-- TAB 0: PROFILES (Visual presets drawer) -->
         <div class="hud-body-pane" id="pane-profiles">
           <div class="hud-row-header">
             <div class="hud-header-left">
-              <span class="hud-pane-title">🎬 Profiles <span class="hud-info-icon" title="One-click visual mastering profiles">ⓘ</span></span>
+              <span class="hud-pane-title">🪄 Visual Profiles <span class="hud-info-icon" title="One-click visual mastering profiles">ⓘ</span></span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
               <button class="hud-badge-site" id="badge-site-profiles">📍 ON THIS SITE</button>
@@ -1542,8 +1605,8 @@ const SmartVideoHUD = {
           </div>
         </div>
 
-        <!-- TAB 1: CAPTURE (Screenshot, Record, PiP, Speed) -->
-        <div class="hud-body-pane" id="pane-capture">
+        <!-- TAB 1: CAPTURE (Screenshot, Record, PiP, Speed - EXACT TARGET UI B SCREENSHOT 3) -->
+        <div class="hud-body-pane active" id="pane-capture">
           <div class="hud-card-action" id="card-take-screenshot">
             <div class="hud-card-left">
               <div class="hud-card-ico">📸</div>
@@ -1552,40 +1615,41 @@ const SmartVideoHUD = {
                 <div class="hud-card-desc">Saves to gallery, auto-downloads & copies to clipboard</div>
               </div>
             </div>
-            <button class="hud-card-btn">Capture (PNG)</button>
+            <button class="hud-card-btn" id="btn-card-shot">Capture (PNG)</button>
           </div>
 
           <div class="hud-card-action" id="card-toggle-record">
             <div class="hud-card-left">
-              <div class="hud-card-ico" id="rec-card-icon">🔴</div>
+              <div class="hud-card-ico" id="rec-card-icon" style="color:#ef4444;">⏺</div>
               <div>
                 <div class="hud-card-title" id="rec-card-title">Record Video</div>
                 <div class="hud-card-desc" id="rec-card-desc">Record playing stream directly without limits</div>
               </div>
             </div>
-            <button class="hud-card-btn" id="rec-card-btn" style="background:#ef4444;">Record</button>
+            <button class="hud-card-btn hud-card-btn-rec" id="rec-card-btn">Record</button>
           </div>
 
-          <div class="hud-divider-label">Playback & Video Utilities</div>
-          <div class="hud-slider-row">
-            <div class="hud-slider-label">📺 Picture-in-Picture</div>
-            <button class="hud-pill-option" id="btn-toggle-pip" style="flex:none; padding:6px 14px;">Toggle PiP</button>
+          <div class="hud-section-label">PLAYBACK & VIDEO UTILITIES</div>
+
+          <div class="hud-pip-row">
+            <div class="hud-pip-title">Picture-in-Picture</div>
+            <button class="hud-btn-ghost" id="btn-toggle-pip">Toggle PiP</button>
           </div>
 
-          <div class="hud-slider-row" style="flex-direction:column; align-items:flex-start; gap:8px;">
-            <div class="hud-slider-label">⏩ Playback Speed</div>
-            <div class="hud-grid-pills" style="width:100%;">
-              <button class="hud-pill-option" data-speed="0.5">0.5x</button>
-              <button class="hud-pill-option" data-speed="0.75">0.75x</button>
-              <button class="hud-pill-option active" data-speed="1.0">1.0x</button>
-              <button class="hud-pill-option" data-speed="1.25">1.25x</button>
-              <button class="hud-pill-option" data-speed="1.5">1.5x</button>
-              <button class="hud-pill-option" data-speed="2.0">2.0x</button>
+          <div class="hud-speed-section">
+            <div class="hud-speed-title">Playback Speed</div>
+            <div class="hud-speed-grid">
+              <button class="hud-speed-btn" data-speed="0.5">0.5x</button>
+              <button class="hud-speed-btn" data-speed="0.75">0.75x</button>
+              <button class="hud-speed-btn active" data-speed="1.0">1.0x</button>
+              <button class="hud-speed-btn" data-speed="1.25">1.25x</button>
+              <button class="hud-speed-btn" data-speed="1.5">1.5x</button>
             </div>
+            <button class="hud-speed-btn hud-speed-btn-full" data-speed="2.0">2.0x</button>
           </div>
         </div>
 
-        <!-- TAB 2: ZOOM (Exact Image 3 match) -->
+        <!-- TAB 2: ZOOM (RESTYLED IN TARGET UI B LANGUAGE) -->
         <div class="hud-body-pane" id="pane-zoom">
           <div class="hud-row-header">
             <div class="hud-header-left">
@@ -1620,12 +1684,11 @@ const SmartVideoHUD = {
             </div>
           </div>
 
-          <!-- Row 3: Remove blackbars automatically [PRO] toggle -->
+          <!-- Row 3: Remove blackbars automatically toggle -->
           <div class="hud-zoom-row" style="justify-content:space-between; margin-top:2px;">
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-size:13px; font-weight:600; color:#f1f5f9; display:flex; align-items:center; gap:6px;">
                 ⛶ Remove blackbars automatically
-                
               </span>
               <span class="hud-info-icon" title="Intelligently detects and crops letterbox/pillarbox borders">ⓘ</span>
             </div>
@@ -1636,10 +1699,10 @@ const SmartVideoHUD = {
           </div>
 
           <!-- Pan Coordinates (revealed when Pan is active) -->
-          <div id="hud-pan-controls" style="display:none; flex-direction:column; gap:10px; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+          <div id="hud-pan-controls" style="display:none; flex-direction:column; gap:10px; padding:12px 14px; background:var(--hud-surface-card); border-radius:var(--hud-radius-card); border:1px solid var(--hud-border);">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
               <span style="font-size:12px; font-weight:700; color:#cbd5e1; letter-spacing:0.5px;">PAN POSITION</span>
-              <button class="hud-badge-action" id="btn-reset-pan" title="Reset Pan coordinates to center (0%, 0%)" style="padding:3px 9px; font-size:11px; cursor:pointer;">↺ RESET PAN</button>
+              <button class="hud-badge-action" id="btn-reset-pan" title="Reset Pan coordinates to center (0%, 0%)" style="padding:4px 10px; font-size:11px; cursor:pointer;">↺ RESET PAN</button>
             </div>
             <div class="hud-slider-row">
               <div class="hud-slider-label">↔ Pan X</div>
@@ -1657,7 +1720,7 @@ const SmartVideoHUD = {
             </div>
           </div>
 
-          <!-- Aspect Ratios Section (Image 3) -->
+          <!-- Aspect Ratios Section -->
           <div class="hud-aspect-header">
             <span class="hud-aspect-title">CROP TO ASPECT RATIO</span>
             <span class="hud-aspect-meta" id="stat-aspect-meta">Video: 16:9 · 1920×1080</span>
@@ -1672,8 +1735,8 @@ const SmartVideoHUD = {
           </div>
         </div>
 
-        <!-- TAB 3: PICTURE (Exact Image 4 match) -->
-        <div class="hud-body-pane active" id="pane-picture">
+        <!-- TAB 3: PICTURE (RESTYLED IN TARGET UI B LANGUAGE) -->
+        <div class="hud-body-pane" id="pane-picture">
           <div class="hud-row-header">
             <div class="hud-header-left">
               <span class="hud-pane-title">◩ Picture</span>
@@ -1712,7 +1775,7 @@ const SmartVideoHUD = {
             </div>
           </div>
 
-          <div class="hud-divider-label">REMASTER </div>
+          <div class="hud-section-label">REMASTER</div>
 
           <div class="hud-slider-row">
             <div class="hud-slider-label">
@@ -1746,11 +1809,11 @@ const SmartVideoHUD = {
           </div>
         </div>
 
-        <!-- TAB 4: AMBIENCE -->
+        <!-- TAB 4: AMBIENCE (RESTYLED IN TARGET UI B LANGUAGE) -->
         <div class="hud-body-pane" id="pane-ambience">
           <div class="hud-row-header">
             <div class="hud-header-left">
-              <span class="hud-pane-title">🔆 Ambience </span>
+              <span class="hud-pane-title">🔆 Ambience</span>
               <label class="hud-toggle-wrap">
                 <input type="checkbox" id="toggle-ambience">
                 <span class="hud-toggle-track"></span>
@@ -1802,7 +1865,6 @@ const SmartVideoHUD = {
             </div>
           </div>
         </div>
-
 
       </div>
     `;
@@ -1889,6 +1951,7 @@ const SmartVideoHUD = {
       btn.addEventListener('mouseenter', () => {
         const tab = btn.dataset.tab;
         this.openTab(tab);
+        if (this.activeVideo) { this.updatePlaybackSpeedUI(this.activeVideo.playbackRate); }
       });
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2433,6 +2496,16 @@ const SmartVideoHUD = {
     showToast(profileKey === 'none' ? 'Profile reset to default' : `Profile applied: ${prof.name}`, 'info');
   },
 
+  updatePlaybackSpeedUI(rate) {
+    const s = this.shadow;
+    if (!s) return;
+    const currentRate = parseFloat(rate !== undefined ? rate : (this.activeVideo?.playbackRate || 1.0));
+    s.querySelectorAll('[data-speed]').forEach(btn => {
+      const speedVal = parseFloat(btn.dataset.speed);
+      btn.classList.toggle('active', Math.abs(speedVal - currentRate) < 0.05);
+    });
+  },
+
   syncUIFromSettings() {
     const s = this.shadow;
     if (!s) return;
@@ -2506,6 +2579,7 @@ const SmartVideoHUD = {
     setVal('slider-amb-audio', this.settings.ambienceAudioPulse);
     setText('val-amb-audio', this.settings.ambienceAudioPulse);
 
+    this.updatePlaybackSpeedUI();
     this.updateSubtexts();
   },
 
@@ -2616,6 +2690,12 @@ const SmartVideoHUD = {
     if (!video) return;
     this.init();
     this.activeVideo = video;
+    if (video && !video.__smartHudRateBound) {
+      video.__smartHudRateBound = true;
+      video.addEventListener('ratechange', () => {
+        this.updatePlaybackSpeedUI(video.playbackRate);
+      });
+    }
     clearTimeout(this.hideTimer);
 
     // Ensure host element is attached to current fullscreenElement or body
@@ -2738,7 +2818,7 @@ const SmartVideoHUD = {
     }
   },
 
-  openPanel(tab = 'picture') {
+  openPanel(tab = 'capture') {
     this.isOpen = true;
     const container = this.shadow.querySelector('.hud-container');
     container.classList.add('open', 'mouse-close');
@@ -7677,27 +7757,33 @@ function showToast(message, type = "success") {
 
   const isError = type === "error";
   const isInfo  = type === "info";
-
-  const accentColor = isError ? "#f43f5e" : isInfo ? "#60a5fa" : "#10b981";
+  const accentColor = isError ? "#EF4444" : "#8B5CF6";
 
   const toast = document.createElement("div");
   toast.className = "cc-toast-notification";
   toast.style.cssText = `
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: rgba(12, 12, 16, 0.95);
+    bottom: 24px;
+    right: 24px;
+    background: rgba(30, 24, 34, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-left: 3px solid ${accentColor};
-    color: #e4e4e7;
-    padding: 10px 16px;
-    border-radius: 0 6px 6px 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #F8FAFC;
+    padding: 10px 18px;
+    border-radius: 12px;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 12.5px;
-    font-weight: 500;
+    font-weight: 600;
     z-index: 2147483647;
-    max-width: 320px;
+    max-width: 340px;
     line-height: 1.45;
     pointer-events: none;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
   `;
   toast.textContent = message;
   document.body.appendChild(toast);
