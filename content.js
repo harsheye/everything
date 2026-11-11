@@ -324,33 +324,117 @@ const SmartVideoHUD = {
     const style = document.createElement('style');
     style.textContent = `
       :host, .hud-container {
-        /* TARGET UI B DESIGN TOKENS */
-        --hud-surface: rgba(30, 24, 34, 0.86);
-        --hud-surface-opaque: rgba(28, 22, 32, 0.96);
-        --hud-surface-card: rgba(255, 255, 255, 0.05);
+        /* ── REFERENCE DESIGN TOKENS (SLATE-NAVY GLASS) ── */
+        /* Surfaces & Glass */
+        --hud-surface-base: rgba(11, 17, 30, 0.86);
+        --hud-surface-header: rgba(11, 17, 30, 0.86);
+        --hud-surface-panel: rgba(11, 17, 30, 0.86);
+        --hud-surface-pill: rgba(11, 17, 30, 0.86);
+        --hud-surface-pill-hover: rgba(11, 17, 30, 0.94);
+        --hud-surface-sliding: rgba(11, 17, 30, 0.96);
+        --hud-surface-card: rgba(255, 255, 255, 0.045);
         --hud-surface-card-hover: rgba(255, 255, 255, 0.08);
-        --hud-border: rgba(255, 255, 255, 0.10);
+        --hud-surface-toast: rgba(11, 17, 30, 0.92);
+        --hud-surface-tooltip: rgba(11, 17, 30, 0.94);
+
+        /* Backdrop Filter */
+        --hud-backdrop-filter: blur(24px);
+
+        /* Borders & Outlines */
+        --hud-border: rgba(255, 255, 255, 0.11);
         --hud-border-subtle: rgba(255, 255, 255, 0.06);
-        --hud-border-active: rgba(139, 92, 246, 0.50);
-        --hud-primary: #8B5CF6;
-        --hud-primary-hover: #7C3AED;
-        --hud-primary-tint: rgba(139, 92, 246, 0.22);
-        --hud-primary-tint-hover: rgba(139, 92, 246, 0.32);
-        --hud-record: #EF4444;
-        --hud-record-hover: #DC2626;
-        --hud-record-tint: rgba(239, 68, 68, 0.20);
-        --hud-text-primary: #FFFFFF;
-        --hud-text-secondary: #E2E8F0;
-        --hud-text-muted: rgba(255, 255, 255, 0.55);
-        --hud-text-label: #6B7A99;
+        --hud-border-hover: rgba(255, 255, 255, 0.22);
+        --hud-border-active-tab: rgba(255, 255, 255, 0.11);
+
+        /* Controls (Idle, Hover, Selected) */
+        --hud-control-idle-fill: rgba(255, 255, 255, 0.07);
+        --hud-control-segmented-fill: rgba(255, 255, 255, 0.06);
+        --hud-control-ghost-fill: rgba(255, 255, 255, 0.05);
+        --hud-control-tile-fill: rgba(255, 255, 255, 0.08);
+        --hud-control-hover-fill: rgba(255, 255, 255, 0.17);
+        --hud-control-selected-fill: rgba(139, 92, 246, 0.24);
+        --hud-control-selected-border: rgba(139, 92, 246, 0.80);
+
+        /* Tabs */
+        --hud-tab-active-fill: rgba(255, 255, 255, 0.13);
+        --hud-tab-active-border: rgba(255, 255, 255, 0.11);
+        --hud-tab-underline: #ffffff;
+
+        /* Sliders */
+        --hud-slider-rail: rgba(255, 255, 255, 0.18);
+        --hud-slider-fill: #8b5cf6;
+        --hud-slider-thumb: #ffffff;
+
+        /* Toggles */
+        --hud-toggle-off-track: rgba(255, 255, 255, 0.18);
+        --hud-toggle-on-track: #8b5cf6;
+        --hud-toggle-knob: #ffffff;
+
+        /* Typography (Tailwind Slate) */
+        --hud-text-primary: #f8fafc;
+        --hud-text-values: #ffffff;
+        --hud-text-label-row: #f1f5f9;
+        --hud-text-label-card: #cbd5e1;
+        --hud-text-chip: #cbd5e1;
+        --hud-text-secondary: #94a3b8;
+        --hud-text-muted: #64748b;
+        --hud-text-section: #64748b;
+        --hud-text-active-tab-sub: #e2e8f0;
+
+        /* Accents & States */
+        --hud-primary: #8b5cf6;
+        --hud-primary-hover: #7c3aed;
+        --hud-record: #ef4444;
+        --hud-record-hover: #dc2626;
+        --hud-record-tint: rgba(239, 68, 68, 0.24);
+        --hud-record-tint-hover: rgba(239, 68, 68, 0.45);
+        --hud-record-live-border: #ff8888;
+        --hud-record-dot-idle: #fca5a5;
+
+        /* Badges & Icons */
+        --hud-badge-fill: rgba(255, 255, 255, 0.07);
+        --hud-badge-border: rgba(255, 255, 255, 0.11);
+        --hud-badge-text: #cbd5e1;
+        --hud-info-icon: #64748b;
+        --hud-info-icon-hover: #cbd5e1;
+
+        /* Divider & Scrollbar */
+        --hud-divider-line: rgba(255, 255, 255, 0.08);
+        --hud-scrollbar-thumb: rgba(255, 255, 255, 0.16);
+
+        /* Highlights & Shines */
+        --hud-shine-edge: rgba(255, 255, 255, 0.12);
+        --hud-shine-center: rgba(255, 255, 255, 0.40);
+        --hud-highlight-top: rgba(255, 255, 255, 0.15);
+        --hud-highlight-fade: rgba(255, 255, 255, 0.01);
+
+        /* Focus Ring */
+        --hud-focus-ring: rgba(139, 92, 246, 0.50);
+
+        /* Shadows, Highlights & Glows */
+        --hud-shadow-header: 0 16px 40px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        --hud-shadow-panel: 0 24px 64px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        --hud-shadow-pill: 0 8px 24px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        --hud-shadow-pill-hover: 0 14px 40px rgba(0, 0, 0, 0.85), 0 0 18px rgba(139, 92, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        --hud-shadow-active-tab: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        --hud-shadow-underline: 0 0 6px rgba(255, 255, 255, 0.70);
+        --hud-shadow-glow-accent: 0 0 10px rgba(139, 92, 246, 0.35);
+        --hud-shadow-btn-primary: 0 4px 12px rgba(139, 92, 246, 0.30);
+        --hud-shadow-btn-primary-hover: 0 6px 18px rgba(139, 92, 246, 0.50);
+        --hud-shadow-btn-record: 0 4px 12px rgba(239, 68, 68, 0.30);
+        --hud-shadow-btn-record-hover: 0 6px 18px rgba(239, 68, 68, 0.50);
+        --hud-shadow-record-dot: 0 0 8px rgba(239, 68, 68, 0.70);
+        --hud-shadow-record-dot-hover: 0 0 12px rgba(239, 68, 68, 0.70);
+        --hud-shadow-thumb: 0 0 10px rgba(139, 92, 246, 0.60), 0 2px 6px rgba(0, 0, 0, 0.50);
+        --hud-shadow-thumb-hover: 0 0 14px rgba(139, 92, 246, 0.90), 0 2px 8px rgba(0, 0, 0, 0.60);
+        --hud-shadow-toggle-knob: 0 2px 4px rgba(0, 0, 0, 0.30);
+
+        /* Radii & Fonts */
         --hud-radius-header: 24px;
         --hud-radius-panel: 22px;
         --hud-radius-card: 16px;
         --hud-radius-btn: 12px;
         --hud-radius-pill: 20px;
-        --hud-blur: blur(20px) saturate(180%);
-        --hud-shadow-panel: 0 24px 64px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-        --hud-shadow-header: 0 16px 40px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.15);
         --hud-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
 
@@ -399,7 +483,7 @@ const SmartVideoHUD = {
         transform: translateX(-50%) translateY(0) !important;
       }
 
-      /* Button / Pill Base State (Restyled with TARGET UI B tokens) */
+      /* Button / Pill Base State (Restyled with REFERENCE tokens) */
       .hud-pill {
         position: relative;
         display: flex;
@@ -408,12 +492,11 @@ const SmartVideoHUD = {
         height: 38px;
         width: 38px;
         border-radius: 19px;
-        background: rgba(30, 24, 34, 0.92);
+        background: var(--hud-surface-pill);
         border: 1px solid var(--hud-border);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.25);
-        backdrop-filter: var(--hud-blur);
-        -webkit-backdrop-filter: var(--hud-blur);
+        box-shadow: var(--hud-shadow-pill);
+        backdrop-filter: var(--hud-backdrop-filter);
+        -webkit-backdrop-filter: var(--hud-backdrop-filter);
         color: var(--hud-text-secondary);
         cursor: pointer;
         transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1),
@@ -445,7 +528,7 @@ const SmartVideoHUD = {
         left: 0;
         right: 0;
         height: 50%;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.01) 100%);
+        background: linear-gradient(180deg, var(--hud-highlight-top) 0%, var(--hud-highlight-fade) 100%);
         border-radius: 22px 22px 0 0;
         opacity: 0;
         transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
@@ -465,9 +548,9 @@ const SmartVideoHUD = {
         background: linear-gradient(
           75deg,
           transparent 20%,
-          rgba(255, 255, 255, 0.12) 45%,
-          rgba(255, 255, 255, 0.40) 50%,
-          rgba(255, 255, 255, 0.12) 55%,
+          var(--hud-shine-edge) 45%,
+          var(--hud-shine-center) 50%,
+          var(--hud-shine-edge) 55%,
           transparent 80%
         );
         transform: rotate(25deg);
@@ -495,13 +578,9 @@ const SmartVideoHUD = {
         padding: 0 14px;
         gap: 10px;
         transform: scale(1.06);
-        background: rgba(28, 22, 32, 0.98);
-        border: 1px solid rgba(139, 92, 246, 0.40);
-        box-shadow: 
-          0 14px 40px rgba(0, 0, 0, 0.85),
-          0 0 18px rgba(139, 92, 246, 0.25),
-          inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.45),
-          inset 0 -1px 1px 0 rgba(255, 255, 255, 0.15);
+        background: var(--hud-surface-pill-hover);
+        border: 1px solid var(--hud-border-hover);
+        box-shadow: var(--hud-shadow-pill-hover);
       }
 
       .hud-pill-icon {
@@ -518,7 +597,7 @@ const SmartVideoHUD = {
       .hud-pill-divider {
         width: 1px;
         height: 18px;
-        background: rgba(255, 255, 255, 0.20);
+        background: var(--hud-border-hover);
         opacity: 0;
         transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
         flex-shrink: 0;
@@ -551,9 +630,9 @@ const SmartVideoHUD = {
       }
 
       .hud-pill-btn-shot {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        color: #ffffff;
+        background: var(--hud-control-tile-fill);
+        border: 1px solid var(--hud-border);
+        color: var(--hud-text-values);
         width: 30px;
         height: 30px;
         border-radius: 50%;
@@ -566,17 +645,17 @@ const SmartVideoHUD = {
         flex-shrink: 0;
       }
       .hud-pill-btn-shot:hover {
-        background: var(--hud-primary-tint);
+        background: var(--hud-control-selected-fill);
         border-color: var(--hud-primary);
-        color: #fff;
+        color: var(--hud-text-values);
         transform: scale(1.15);
-        box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
+        box-shadow: var(--hud-shadow-btn-primary);
       }
 
       .hud-pill-btn-rec {
-        background: rgba(239, 68, 68, 0.15);
-        border: 1px solid rgba(239, 68, 68, 0.35);
-        color: #fca5a5;
+        background: var(--hud-record-tint);
+        border: 1px solid var(--hud-record-tint-hover);
+        color: var(--hud-record-dot-idle);
         width: 30px;
         height: 30px;
         border-radius: 50%;
@@ -592,31 +671,31 @@ const SmartVideoHUD = {
         width: 10px;
         height: 10px;
         border-radius: 50%;
-        background: #ef4444;
-        box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+        background: var(--hud-record);
+        box-shadow: var(--hud-shadow-record-dot);
         display: inline-block;
         transition: all 0.2s;
       }
       .hud-pill-btn-rec:hover {
-        background: rgba(239, 68, 68, 0.45);
-        border-color: #ef4444;
+        background: var(--hud-record-tint-hover);
+        border-color: var(--hud-record);
         transform: scale(1.15);
-        box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+        box-shadow: var(--hud-shadow-record-dot-hover);
       }
       .hud-pill-btn-rec:hover .hud-rec-dot {
         transform: scale(1.15);
       }
       .hud-pill-rec-live {
-        background: #ef4444 !important;
-        border-color: #ff8888 !important;
-        color: #fff !important;
+        background: var(--hud-record) !important;
+        border-color: var(--hud-record-live-border) !important;
+        color: var(--hud-text-values) !important;
         animation: hud-pulse-red 1.2s infinite;
       }
 
       .hud-pill-btn-more {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        color: #94a3b8;
+        background: var(--hud-control-segmented-fill);
+        border: 1px solid var(--hud-border);
+        color: var(--hud-text-secondary);
         width: 30px;
         height: 30px;
         border-radius: 50%;
@@ -629,9 +708,9 @@ const SmartVideoHUD = {
         flex-shrink: 0;
       }
       .hud-pill-btn-more:hover {
-        background: rgba(255, 255, 255, 0.18);
-        border-color: rgba(255, 255, 255, 0.30);
-        color: #fff;
+        background: var(--hud-control-hover-fill);
+        border-color: var(--hud-border-hover);
+        color: var(--hud-text-values);
         transform: scale(1.15);
       }
 
@@ -639,17 +718,17 @@ const SmartVideoHUD = {
         display: none;
       }
 
-      /* HEADER BAR (TARGET UI B) */
+      /* HEADER BAR (REFERENCE) */
       .hud-top-bar {
         display: none;
         align-items: center;
         padding: 6px 10px;
-        background: var(--hud-surface);
+        background: var(--hud-surface-header);
         border: 1px solid var(--hud-border);
         border-radius: var(--hud-radius-header);
         box-shadow: var(--hud-shadow-header);
-        backdrop-filter: var(--hud-blur);
-        -webkit-backdrop-filter: var(--hud-blur);
+        backdrop-filter: var(--hud-backdrop-filter);
+        -webkit-backdrop-filter: var(--hud-backdrop-filter);
         gap: 6px;
         animation: hud-pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
@@ -667,7 +746,7 @@ const SmartVideoHUD = {
         height: 38px;
         padding: 0 10px;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.06);
+        background: var(--hud-control-segmented-fill);
         border: 1px solid var(--hud-border);
         color: var(--hud-text-secondary);
         cursor: pointer;
@@ -677,15 +756,15 @@ const SmartVideoHUD = {
       }
       .hud-bar-profiles-btn:hover,
       .hud-bar-profiles-btn.active {
-        background: var(--hud-primary-tint);
-        border-color: var(--hud-primary);
-        box-shadow: 0 0 14px rgba(139, 92, 246, 0.40);
-        color: #ffffff;
+        background: var(--hud-control-selected-fill);
+        border-color: var(--hud-control-selected-border);
+        box-shadow: var(--hud-shadow-glow-accent);
+        color: var(--hud-text-values);
       }
       .hud-profile-wand-label {
         font-size: 12px;
         font-weight: 700;
-        color: #ffffff;
+        color: var(--hud-text-values);
       }
 
       /* Top Bar Tabs */
@@ -705,14 +784,14 @@ const SmartVideoHUD = {
         position: relative;
       }
       .hud-tab-item:hover {
-        background: rgba(255, 255, 255, 0.06);
+        background: var(--hud-control-segmented-fill);
         color: var(--hud-text-primary);
       }
       .hud-tab-item.active {
-        background: rgba(255, 255, 255, 0.12);
-        border-color: rgba(255, 255, 255, 0.18);
+        background: var(--hud-tab-active-fill);
+        border-color: var(--hud-tab-active-border);
         color: var(--hud-text-primary);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        box-shadow: var(--hud-shadow-active-tab);
       }
       .hud-tab-title {
         font-size: 12.5px;
@@ -728,17 +807,17 @@ const SmartVideoHUD = {
         margin-top: 1px;
       }
       .hud-tab-item.active .hud-tab-sub {
-        color: rgba(255, 255, 255, 0.85);
+        color: var(--hud-text-active-tab-sub);
       }
       /* Active tab short white underline bar */
       .hud-tab-indicator {
         display: none;
         width: 22px;
         height: 2.5px;
-        background: #ffffff;
+        background: var(--hud-tab-underline);
         border-radius: 2px;
         margin-top: 3px;
-        box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+        box-shadow: var(--hud-shadow-underline);
       }
       .hud-tab-item.active .hud-tab-indicator {
         display: block;
@@ -766,8 +845,8 @@ const SmartVideoHUD = {
         flex-shrink: 0;
       }
       .hud-tool-btn:hover {
-        background: rgba(255, 255, 255, 0.10);
-        color: #fff;
+        background: var(--hud-border);
+        color: var(--hud-text-values);
       }
 
       /* Sliding Collapse State */
@@ -790,11 +869,9 @@ const SmartVideoHUD = {
         width: 440px !important;
         max-width: 90vw !important;
         border-radius: 18px !important;
-        background: var(--hud-surface-opaque) !important;
-        border: 1px solid rgba(139, 92, 246, 0.40) !important;
-        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.85),
-                    0 0 18px rgba(139, 92, 246, 0.25),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+        background: var(--hud-surface-sliding) !important;
+        border: 1px solid var(--hud-control-selected-fill) !important;
+        box-shadow: var(--hud-shadow-pill-hover) !important;
         padding: 0 !important;
         margin: 0 !important;
         overflow: hidden !important;
@@ -821,7 +898,7 @@ const SmartVideoHUD = {
       .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-slider-label {
         font-size: 13.5px !important;
         font-weight: 500 !important;
-        color: #f1f5f9 !important;
+        color: var(--hud-text-label-row) !important;
         white-space: nowrap !important;
         min-width: 110px !important;
         display: flex !important;
@@ -850,23 +927,23 @@ const SmartVideoHUD = {
       .hud-container.slider-dragging .hud-slider-row.is-active-sliding .hud-range-val {
         font-size: 13.5px !important;
         font-weight: 700 !important;
-        color: #ffffff !important;
+        color: var(--hud-text-values) !important;
         min-width: 32px !important;
         text-align: right !important;
       }
 
-      /* MAIN BODY PANEL (TARGET UI B) */
+      /* MAIN BODY PANEL (REFERENCE) */
       .hud-panel-wrap {
         display: none;
         flex-direction: column;
         width: 530px;
         max-width: 95vw;
         border-radius: var(--hud-radius-panel);
-        background: var(--hud-surface);
+        background: var(--hud-surface-panel);
         border: 1px solid var(--hud-border);
         box-shadow: var(--hud-shadow-panel);
-        backdrop-filter: var(--hud-blur);
-        -webkit-backdrop-filter: var(--hud-blur);
+        backdrop-filter: var(--hud-backdrop-filter);
+        -webkit-backdrop-filter: var(--hud-backdrop-filter);
         overflow: hidden;
         animation: hud-pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
       }
@@ -890,7 +967,7 @@ const SmartVideoHUD = {
         width: 5px;
       }
       .hud-body-pane::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.16);
+        background: var(--hud-scrollbar-thumb);
         border-radius: 4px;
       }
 
@@ -916,16 +993,16 @@ const SmartVideoHUD = {
       }
       .hud-info-icon {
         font-size: 12px;
-        color: #64748b;
+        color: var(--hud-info-icon);
         cursor: help;
         transition: color 0.15s;
       }
-      .hud-info-icon:hover { color: #cbd5e1; }
+      .hud-info-icon:hover { color: var(--hud-info-icon-hover); }
 
       .hud-badge-site {
-        background: var(--hud-surface-card);
+        background: var(--hud-control-idle-fill);
         border: 1px solid var(--hud-border);
-        color: var(--hud-text-muted);
+        color: var(--hud-text-chip);
         font-size: 11px;
         font-weight: 700;
         padding: 4px 10px;
@@ -937,14 +1014,14 @@ const SmartVideoHUD = {
         transition: all 0.15s;
       }
       .hud-badge-site:hover {
-        background: var(--hud-surface-card-hover);
-        color: #ffffff;
+        background: var(--hud-control-hover-fill);
+        color: var(--hud-text-values);
       }
 
       .hud-badge-action {
-        background: var(--hud-surface-card);
+        background: var(--hud-control-idle-fill);
         border: 1px solid var(--hud-border);
-        color: var(--hud-text-muted);
+        color: var(--hud-text-chip);
         font-size: 11px;
         font-weight: 700;
         padding: 5px 12px;
@@ -956,19 +1033,19 @@ const SmartVideoHUD = {
         gap: 5px;
       }
       .hud-badge-action:hover {
-        background: var(--hud-surface-card-hover);
-        border-color: rgba(255, 255, 255, 0.25);
-        color: #ffffff;
+        background: var(--hud-control-hover-fill);
+        border-color: var(--hud-border-hover);
+        color: var(--hud-text-values);
       }
       .hud-badge-action.active {
-        background: var(--hud-primary-tint);
-        border-color: var(--hud-primary);
-        color: #ffffff;
-        box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+        background: var(--hud-control-selected-fill);
+        border-color: var(--hud-control-selected-border);
+        color: var(--hud-text-values);
+        box-shadow: var(--hud-shadow-glow-accent);
       }
 
       .hud-btn-reset {
-        background: var(--hud-surface-card);
+        background: var(--hud-control-idle-fill);
         border: 1px solid var(--hud-border);
         color: var(--hud-text-muted);
         width: 28px;
@@ -982,12 +1059,12 @@ const SmartVideoHUD = {
         transition: all 0.15s;
       }
       .hud-btn-reset:hover {
-        background: var(--hud-surface-card-hover);
-        color: #fff;
+        background: var(--hud-control-hover-fill);
+        color: var(--hud-text-values);
         transform: rotate(-45deg);
       }
 
-      /* iOS Toggle Switch in TARGET UI B Language */
+      /* iOS Toggle Switch in REFERENCE Language */
       .hud-toggle-wrap {
         position: relative;
         display: inline-block;
@@ -1000,10 +1077,10 @@ const SmartVideoHUD = {
         position: absolute;
         cursor: pointer;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(255, 255, 255, 0.16);
+        background: var(--hud-toggle-off-track);
         border-radius: 22px;
         transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        border: 1px solid rgba(255, 255, 255, 0.10);
+        border: 1px solid var(--hud-border);
       }
       .hud-toggle-track:before {
         position: absolute;
@@ -1012,20 +1089,20 @@ const SmartVideoHUD = {
         width: 16px;
         left: 2px;
         bottom: 2px;
-        background-color: white;
+        background-color: var(--hud-toggle-knob);
         border-radius: 50%;
         transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        box-shadow: var(--hud-shadow-toggle-knob);
       }
       .hud-toggle-wrap input:checked + .hud-toggle-track {
-        background: var(--hud-primary);
-        border-color: var(--hud-primary);
+        background: var(--hud-toggle-on-track);
+        border-color: var(--hud-toggle-on-track);
       }
       .hud-toggle-wrap input:checked + .hud-toggle-track:before {
         transform: translateX(18px);
       }
 
-      /* Control Sliders in TARGET UI B Language */
+      /* Control Sliders in REFERENCE Language */
       .hud-slider-row {
         display: flex;
         align-items: center;
@@ -1035,7 +1112,7 @@ const SmartVideoHUD = {
       .hud-slider-label {
         font-size: 13.5px;
         font-weight: 500;
-        color: var(--hud-text-secondary);
+        color: var(--hud-text-label-row);
         display: flex;
         align-items: center;
         gap: 8px;
@@ -1052,7 +1129,7 @@ const SmartVideoHUD = {
         -webkit-appearance: none;
         height: 4px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.15);
+        background: var(--hud-slider-rail);
         outline: none;
         cursor: pointer;
       }
@@ -1062,41 +1139,41 @@ const SmartVideoHUD = {
         width: 15px;
         height: 15px;
         border-radius: 50%;
-        background: #ffffff;
+        background: var(--hud-slider-thumb);
         cursor: pointer;
-        box-shadow: 0 0 10px rgba(139, 92, 246, 0.6), 0 2px 6px rgba(0,0,0,0.5);
+        box-shadow: var(--hud-shadow-thumb);
         transition: transform 0.12s, box-shadow 0.12s;
       }
       .hud-range::-webkit-slider-thumb:hover {
         transform: scale(1.25);
-        box-shadow: 0 0 14px rgba(139, 92, 246, 0.9), 0 2px 8px rgba(0,0,0,0.6);
+        box-shadow: var(--hud-shadow-thumb-hover);
       }
       .hud-range-val {
         font-size: 13px;
         font-weight: 700;
-        color: var(--hud-text-primary);
+        color: var(--hud-text-values);
         min-width: 32px;
         text-align: right;
         font-variant-numeric: tabular-nums;
       }
 
       .hud-badge-ext {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        color: #94a3b8;
+        background: var(--hud-badge-fill);
+        border: 1px solid var(--hud-badge-border);
+        color: var(--hud-badge-text);
         font-size: 9px;
         font-weight: 700;
         padding: 1px 5px;
         border-radius: 4px;
       }
 
-      /* Section Divider Labels (Hairline rule matching UI B) */
+      /* Section Divider Labels (Hairline rule matching REFERENCE) */
       .hud-section-label,
       .hud-divider-label {
         display: flex;
         align-items: center;
         gap: 12px;
-        color: var(--hud-text-label);
+        color: var(--hud-text-section);
         font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
@@ -1108,7 +1185,7 @@ const SmartVideoHUD = {
         content: "";
         flex: 1;
         height: 1px;
-        background: rgba(255, 255, 255, 0.08);
+        background: var(--hud-divider-line);
       }
 
       /* PROFILES TAB STYLES */
@@ -1130,13 +1207,13 @@ const SmartVideoHUD = {
       }
       .hud-profile-item:hover {
         background: var(--hud-surface-card-hover);
-        border-color: rgba(255, 255, 255, 0.18);
+        border-color: var(--hud-border-hover);
         transform: translateX(2px);
       }
       .hud-profile-item.active {
-        background: var(--hud-primary-tint);
-        border-color: var(--hud-border-active);
-        box-shadow: 0 4px 16px rgba(139, 92, 246, 0.25);
+        background: var(--hud-control-selected-fill);
+        border-color: var(--hud-control-selected-border);
+        box-shadow: var(--hud-shadow-glow-accent);
       }
       .hud-profile-left {
         display: flex;
@@ -1149,17 +1226,12 @@ const SmartVideoHUD = {
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #f1f5f9;
-      }
-      .hud-profile-info {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
+        color: var(--hud-text-label-row);
       }
       .hud-profile-name {
         font-size: 13.5px;
         font-weight: 700;
-        color: #ffffff;
+        color: var(--hud-text-primary);
       }
       .hud-profile-desc {
         font-size: 11px;
@@ -1169,7 +1241,7 @@ const SmartVideoHUD = {
         display: flex;
         align-items: center;
         gap: 6px;
-        color: #94a3b8;
+        color: var(--hud-text-secondary);
         font-size: 12.5px;
       }
 
@@ -1181,13 +1253,13 @@ const SmartVideoHUD = {
         gap: 14px;
       }
       .hud-zoom-pill-btn {
-        background: var(--hud-surface-card);
+        background: var(--hud-control-idle-fill);
         border: 1px solid var(--hud-border);
         border-radius: var(--hud-radius-btn);
         padding: 7px 14px;
         font-size: 12px;
         font-weight: 600;
-        color: var(--hud-text-secondary);
+        color: var(--hud-text-label-row);
         display: flex;
         align-items: center;
         gap: 6px;
@@ -1196,15 +1268,15 @@ const SmartVideoHUD = {
         transition: all 0.18s;
       }
       .hud-zoom-pill-btn:hover {
-        background: var(--hud-surface-card-hover);
-        border-color: rgba(255, 255, 255, 0.22);
-        color: #ffffff;
+        background: var(--hud-control-hover-fill);
+        border-color: var(--hud-border-hover);
+        color: var(--hud-text-values);
       }
       .hud-zoom-pill-btn.active {
-        background: var(--hud-primary-tint);
-        border-color: var(--hud-primary);
-        color: #ffffff;
-        box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+        background: var(--hud-control-selected-fill);
+        border-color: var(--hud-control-selected-border);
+        color: var(--hud-text-values);
+        box-shadow: var(--hud-shadow-glow-accent);
       }
       .hud-aspect-header {
         display: flex;
@@ -1214,7 +1286,7 @@ const SmartVideoHUD = {
         margin-bottom: 2px;
       }
       .hud-aspect-title {
-        color: var(--hud-text-label);
+        color: var(--hud-text-section);
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.8px;
@@ -1222,7 +1294,7 @@ const SmartVideoHUD = {
       }
       .hud-aspect-meta {
         font-size: 11px;
-        color: #94a3b8;
+        color: var(--hud-text-secondary);
         font-weight: 600;
         font-variant-numeric: tabular-nums;
       }
@@ -1234,30 +1306,30 @@ const SmartVideoHUD = {
       .hud-aspect-btn {
         flex: 1;
         text-align: center;
-        background: var(--hud-surface-card);
+        background: var(--hud-control-segmented-fill);
         border: 1px solid var(--hud-border);
         border-radius: var(--hud-radius-btn);
         padding: 8px 0;
         font-size: 12px;
         font-weight: 600;
-        color: var(--hud-text-muted);
+        color: var(--hud-text-secondary);
         cursor: pointer;
         transition: all 0.18s;
       }
       .hud-aspect-btn:hover {
-        background: var(--hud-surface-card-hover);
-        border-color: rgba(255, 255, 255, 0.22);
-        color: #ffffff;
+        background: var(--hud-control-hover-fill);
+        border-color: var(--hud-border-hover);
+        color: var(--hud-text-values);
       }
       .hud-aspect-btn.active {
-        background: var(--hud-primary-tint);
-        border: 1px solid var(--hud-primary);
-        color: #ffffff;
+        background: var(--hud-control-selected-fill);
+        border: 1px solid var(--hud-control-selected-border);
+        color: var(--hud-text-values);
         font-weight: 700;
-        box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+        box-shadow: var(--hud-shadow-glow-accent);
       }
 
-      /* CAPTURE TAB ACTION CARDS (EXACT MATCH FOR TARGET UI B SCREENSHOT 3) */
+      /* CAPTURE TAB ACTION CARDS (REFERENCE) */
       .hud-card-action {
         background: var(--hud-surface-card);
         border: 1px solid var(--hud-border);
@@ -1271,7 +1343,7 @@ const SmartVideoHUD = {
       }
       .hud-card-action:hover {
         background: var(--hud-surface-card-hover);
-        border-color: rgba(255, 255, 255, 0.18);
+        border-color: var(--hud-border-hover);
         transform: translateY(-1px);
       }
       .hud-card-left {
@@ -1283,12 +1355,12 @@ const SmartVideoHUD = {
         width: 42px;
         height: 42px;
         border-radius: var(--hud-radius-btn);
-        background: rgba(255, 255, 255, 0.08);
+        background: var(--hud-control-tile-fill);
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 20px;
-        color: #f1f5f9;
+        color: var(--hud-text-label-row);
         flex-shrink: 0;
       }
       .hud-card-title {
@@ -1298,13 +1370,13 @@ const SmartVideoHUD = {
       }
       .hud-card-desc {
         font-size: 11.5px;
-        color: var(--hud-text-muted);
+        color: var(--hud-text-secondary);
         margin-top: 2px;
         line-height: 1.4;
       }
       .hud-card-btn {
         background: var(--hud-primary);
-        color: #ffffff;
+        color: var(--hud-text-values);
         border: none;
         padding: 8px 18px;
         border-radius: var(--hud-radius-btn);
@@ -1312,21 +1384,21 @@ const SmartVideoHUD = {
         font-weight: 600;
         cursor: pointer;
         transition: all 0.18s ease;
-        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        box-shadow: var(--hud-shadow-btn-primary);
         white-space: nowrap;
       }
       .hud-card-btn:hover {
         background: var(--hud-primary-hover);
         transform: translateY(-1px);
-        box-shadow: 0 6px 18px rgba(139, 92, 246, 0.5);
+        box-shadow: var(--hud-shadow-btn-primary-hover);
       }
       .hud-card-btn-rec {
         background: var(--hud-record);
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        box-shadow: var(--hud-shadow-btn-record);
       }
       .hud-card-btn-rec:hover {
         background: var(--hud-record-hover);
-        box-shadow: 0 6px 18px rgba(239, 68, 68, 0.5);
+        box-shadow: var(--hud-shadow-btn-record-hover);
       }
 
       /* Picture in Picture row */
@@ -1339,23 +1411,23 @@ const SmartVideoHUD = {
       .hud-pip-title {
         font-size: 13.5px;
         font-weight: 600;
-        color: var(--hud-text-secondary);
+        color: var(--hud-text-label-card);
       }
       .hud-btn-ghost {
-        background: var(--hud-surface-card);
-        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: var(--hud-control-ghost-fill);
+        border: 1px solid var(--hud-border);
         border-radius: var(--hud-radius-btn);
         padding: 8px 18px;
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--hud-text-secondary);
+        color: var(--hud-text-label-card);
         cursor: pointer;
         transition: all 0.18s ease;
       }
       .hud-btn-ghost:hover {
-        background: var(--hud-surface-card-hover);
-        border-color: rgba(255, 255, 255, 0.25);
-        color: #ffffff;
+        background: var(--hud-control-hover-fill);
+        border-color: var(--hud-border-hover);
+        color: var(--hud-text-values);
       }
 
       /* Playback Speed section with 5 equal-width buttons + full-width 2.0x on row 2 */
@@ -1368,7 +1440,7 @@ const SmartVideoHUD = {
       .hud-speed-title {
         font-size: 13.5px;
         font-weight: 600;
-        color: var(--hud-text-secondary);
+        color: var(--hud-text-label-card);
       }
       .hud-speed-grid {
         display: grid;
@@ -1377,10 +1449,10 @@ const SmartVideoHUD = {
         width: 100%;
       }
       .hud-speed-btn {
-        background: var(--hud-surface-card);
+        background: var(--hud-control-idle-fill);
         border: 1px solid var(--hud-border);
         border-radius: var(--hud-radius-btn);
-        color: rgba(255, 255, 255, 0.85);
+        color: var(--hud-text-label-card);
         font-size: 12.5px;
         font-weight: 600;
         padding: 8px 0;
@@ -1389,15 +1461,15 @@ const SmartVideoHUD = {
         transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .hud-speed-btn:hover {
-        background: var(--hud-surface-card-hover);
-        border-color: rgba(255, 255, 255, 0.22);
-        color: #ffffff;
+        background: var(--hud-control-hover-fill);
+        border-color: var(--hud-border-hover);
+        color: var(--hud-text-values);
       }
       .hud-speed-btn.active {
-        background: var(--hud-primary-tint);
-        border: 1px solid var(--hud-primary);
-        color: #ffffff;
-        box-shadow: 0 0 12px rgba(139, 92, 246, 0.35);
+        background: var(--hud-control-selected-fill);
+        border: 1px solid var(--hud-control-selected-border);
+        color: var(--hud-text-values);
+        box-shadow: var(--hud-shadow-glow-accent);
       }
       .hud-speed-btn-full {
         width: 100%;
@@ -1620,7 +1692,7 @@ const SmartVideoHUD = {
 
           <div class="hud-card-action" id="card-toggle-record">
             <div class="hud-card-left">
-              <div class="hud-card-ico" id="rec-card-icon" style="color:#ef4444;">⏺</div>
+              <div class="hud-card-ico" id="rec-card-icon" style="color:var(--hud-record);">⏺</div>
               <div>
                 <div class="hud-card-title" id="rec-card-title">Record Video</div>
                 <div class="hud-card-desc" id="rec-card-desc">Record playing stream directly without limits</div>
@@ -1687,7 +1759,7 @@ const SmartVideoHUD = {
           <!-- Row 3: Remove blackbars automatically toggle -->
           <div class="hud-zoom-row" style="justify-content:space-between; margin-top:2px;">
             <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:13px; font-weight:600; color:#f1f5f9; display:flex; align-items:center; gap:6px;">
+              <span style="font-size:13px; font-weight:600; color:var(--hud-text-label-row); display:flex; align-items:center; gap:6px;">
                 ⛶ Remove blackbars automatically
               </span>
               <span class="hud-info-icon" title="Intelligently detects and crops letterbox/pillarbox borders">ⓘ</span>
@@ -1701,7 +1773,7 @@ const SmartVideoHUD = {
           <!-- Pan Coordinates (revealed when Pan is active) -->
           <div id="hud-pan-controls" style="display:none; flex-direction:column; gap:10px; padding:12px 14px; background:var(--hud-surface-card); border-radius:var(--hud-radius-card); border:1px solid var(--hud-border);">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
-              <span style="font-size:12px; font-weight:700; color:#cbd5e1; letter-spacing:0.5px;">PAN POSITION</span>
+              <span style="font-size:12px; font-weight:700; color:var(--hud-text-label-card); letter-spacing:0.5px;">PAN POSITION</span>
               <button class="hud-badge-action" id="btn-reset-pan" title="Reset Pan coordinates to center (0%, 0%)" style="padding:4px 10px; font-size:11px; cursor:pointer;">↺ RESET PAN</button>
             </div>
             <div class="hud-slider-row">
@@ -3172,7 +3244,7 @@ const SmartVideoHUD = {
 
     if (isRecording) {
       if (btn) {
-        btn.innerHTML = `<span class="hud-rec-dot" style="background:#fff; border-radius:2px; width:8px; height:8px;"></span>`;
+        btn.innerHTML = `<span class="hud-rec-dot" style="background:var(--hud-text-values); border-radius:2px; width:8px; height:8px;"></span>`;
         btn.title = `Stop Recording (${timerText})`;
         btn.classList.add('hud-pill-rec-live');
       }
@@ -7756,8 +7828,7 @@ function showToast(message, type = "success") {
   existingToasts.forEach(t => t.remove());
 
   const isError = type === "error";
-  const isInfo  = type === "info";
-  const accentColor = isError ? "#EF4444" : "#8B5CF6";
+  const accentColor = isError ? "var(--hud-record, #ef4444)" : "var(--hud-primary, #8b5cf6)";
 
   const toast = document.createElement("div");
   toast.className = "cc-toast-notification";
@@ -7765,22 +7836,22 @@ function showToast(message, type = "success") {
     position: fixed;
     bottom: 24px;
     right: 24px;
-    background: rgba(30, 24, 34, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--hud-surface-toast, rgba(11, 17, 30, 0.92));
+    border: 1px solid var(--hud-border, rgba(255, 255, 255, 0.11));
     border-left: 3px solid ${accentColor};
-    color: #F8FAFC;
+    color: var(--hud-text-primary, #f8fafc);
     padding: 10px 18px;
     border-radius: 12px;
-    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--hud-font, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-size: 12.5px;
     font-weight: 600;
     z-index: 2147483647;
     max-width: 340px;
     line-height: 1.45;
     pointer-events: none;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    box-shadow: var(--hud-shadow-panel, 0 24px 64px rgba(0, 0, 0, 0.85));
+    backdrop-filter: var(--hud-backdrop-filter, blur(24px));
+    -webkit-backdrop-filter: var(--hud-backdrop-filter, blur(24px));
     display: flex;
     align-items: center;
     gap: 8px;
